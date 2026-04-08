@@ -1,0 +1,776 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="UTF-8">
+  <link rel="icon" type="image/png" href="icons/icon.png" sizes="16x16">
+  <title>天翼视联助手</title>
+  <style>
+    * {
+      margin: 0;
+      padding: 0;
+      box-sizing: border-box;
+    }
+    
+    body {
+      width: 100%;
+      height: 100vh;
+      padding: 16px;
+      font-family: -apple-system, BlinkMacSystemFont, 'SF Pro Display', 'Segoe UI', Roboto, sans-serif;
+      font-size: 11px;
+      background: linear-gradient(180deg, #fafbfc 0%, #f0f2f5 100%);
+      display: flex;
+      flex-direction: column;
+      overflow: hidden;
+      position: relative;
+      box-sizing: border-box;
+    }
+    .header-section {
+      flex-shrink: 0;
+      position: relative;
+      z-index: 10;
+    }
+    h2 {
+      margin: 0 0 16px 0;
+      color: #ffffff;
+      font-size: 19px;
+      background: linear-gradient(135deg, #3b82f6 0%, #60a5fa 100%);
+      padding: 16px;
+      text-align: center;
+      font-weight: 700;
+      border-radius: 16px;
+      box-shadow: 0 8px 32px rgba(59, 130, 246, 0.25);
+      letter-spacing: -0.5px;
+      backdrop-filter: blur(20px);
+      border: 1px solid rgba(255, 255, 255, 0.3);
+      transition: all 0.3s ease;
+    }
+    h2:hover {
+      transform: translateY(-2px);
+      box-shadow: 0 12px 40px rgba(59, 130, 246, 0.35);
+    }
+    .tab-container {
+      display: flex;
+      margin-bottom: 16px;
+      gap: 8px;
+      position: relative;
+      z-index: 9;
+    }
+    .tab-btn {
+      flex: 1;
+      padding: 12px 10px;
+      border: none;
+      border-radius: 12px;
+      background: rgba(255, 255, 255, 0.7);
+      color: #64748b;
+      cursor: pointer;
+      font-size: 11px;
+      font-weight: 600;
+      transition: all 0.25s cubic-bezier(0.4, 0, 0.2, 1);
+      backdrop-filter: blur(20px);
+      box-shadow: 0 4px 16px rgba(0, 0, 0, 0.08);
+      border: 1px solid rgba(255, 255, 255, 0.5);
+    }
+    .tab-btn.active {
+      background: linear-gradient(135deg, #3b82f6 0%, #60a5fa 100%);
+      color: white;
+      box-shadow: 0 8px 24px rgba(59, 130, 246, 0.35);
+      transform: translateY(-3px);
+      border: 1px solid rgba(255, 255, 255, 0.8);
+    }
+    .tab-btn:hover:not(.active) {
+      background: rgba(255, 255, 255, 0.9);
+      transform: translateY(-2px);
+      box-shadow: 0 6px 20px rgba(0, 0, 0, 0.12);
+    }
+    .page {
+      display: none;
+      flex: 1;
+      overflow-y: auto;
+      overflow-x: hidden;
+      min-height: 0;
+      padding-bottom: 70px;
+    }
+    .page.active {
+      display: flex;
+      flex-direction: column;
+    }
+    .footer-section {
+      position: fixed;
+      bottom: 0;
+      left: 0;
+      right: 0;
+      background: rgba(250, 251, 252, 0.8);
+      padding: 12px 16px;
+      border-top: 1px solid rgba(226, 232, 240, 0.8);
+      z-index: 10;
+      backdrop-filter: blur(20px);
+      box-shadow: 0 -4px 16px rgba(0, 0, 0, 0.08);
+    }
+    .progress-container {
+      margin-top: 12px;
+      background: rgba(255, 255, 255, 0.7);
+      border-radius: 16px;
+      padding: 16px;
+      box-shadow: 0 4px 16px rgba(0, 0, 0, 0.08);
+      backdrop-filter: blur(20px);
+      border: 1px solid rgba(255, 255, 255, 0.5);
+      transition: all 0.3s ease;
+    }
+    .progress-container:hover {
+      box-shadow: 0 6px 24px rgba(0, 0, 0, 0.12);
+      transform: translateY(-1px);
+    }
+    .progress-label {
+      font-weight: 700;
+      color: #1e293b;
+      margin-bottom: 10px;
+      font-size: 11px;
+      letter-spacing: -0.3px;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+    }
+    .progress-bar {
+      width: 100%;
+      height: 8px;
+      background: rgba(226, 232, 240, 0.6);
+      border-radius: 4px;
+      overflow: hidden;
+      backdrop-filter: blur(10px);
+      box-shadow: inset 0 1px 3px rgba(0, 0, 0, 0.1);
+    }
+    .progress-fill {
+      height: 100%;
+      background: linear-gradient(90deg, #3b82f6 0%, #60a5fa 100%);
+      border-radius: 4px;
+      transition: width 0.3s ease;
+      width: 0%;
+      box-shadow: 0 0 10px rgba(59, 130, 246, 0.5);
+    }
+    .progress-text {
+      font-size: 11px;
+      color: #64748b;
+      margin-top: 6px;
+      font-weight: 500;
+    }
+    .section {
+      margin-bottom: 14px;
+      background: rgba(255, 255, 255, 0.7);
+      border-radius: 16px;
+      padding: 16px;
+      box-shadow: 0 4px 16px rgba(0, 0, 0, 0.08);
+      backdrop-filter: blur(20px);
+      border: 1px solid rgba(255, 255, 255, 0.5);
+      transition: all 0.3s ease;
+    }
+    .section:hover {
+      box-shadow: 0 6px 24px rgba(0, 0, 0, 0.12);
+      transform: translateY(-1px);
+    }
+    .section-title {
+      font-weight: 700;
+      color: #1e293b;
+      margin-bottom: 10px;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      font-size: 11px;
+      letter-spacing: -0.3px;
+    }
+    .copy-btn {
+      background: linear-gradient(135deg, #3b82f6 0%, #60a5fa 100%);
+      color: white;
+      border: none;
+      padding: 6px 12px;
+      border-radius: 10px;
+      cursor: pointer;
+      font-size: 11px;
+      font-weight: 600;
+      transition: all 0.25s cubic-bezier(0.4, 0, 0.2, 1);
+      box-shadow: 0 4px 12px rgba(59, 130, 246, 0.25);
+      backdrop-filter: blur(10px);
+      border: 1px solid rgba(255, 255, 255, 0.3);
+    }
+    .copy-btn:hover {
+      transform: translateY(-2px);
+      box-shadow: 0 6px 20px rgba(59, 130, 246, 0.35);
+    }
+    .content-box {
+      background: rgba(255, 255, 255, 0.8);
+      border: 1px solid rgba(226, 232, 240, 0.8);
+      border-radius: 12px;
+      padding: 14px;
+      max-height: 100px;
+      overflow-y: auto;
+      word-break: break-all;
+      font-family: 'SF Mono', 'Monaco', 'Menlo', 'Ubuntu Mono', monospace;
+      font-size: 11px;
+      color: #475569;
+      line-height: 1.5;
+      backdrop-filter: blur(10px);
+      box-shadow: 0 2px 8px rgba(0, 0, 0, 0.04);
+    }
+    .status {
+      padding: 12px 16px;
+      border-radius: 12px;
+      margin-bottom: 12px;
+      font-size: 11px;
+      font-weight: 600;
+      backdrop-filter: blur(20px);
+      position: relative;
+      z-index: 11;
+      display: flex;
+      align-items: center;
+      transition: all 0.3s ease;
+      min-height: 48px;
+      border: 1px solid rgba(255, 255, 255, 0.5);
+      box-shadow: 0 4px 16px rgba(0, 0, 0, 0.08);
+    }
+    .status.hidden {
+      opacity: 0;
+      visibility: hidden;
+      height: 0;
+      margin-bottom: 0;
+      padding: 0 16px;
+      overflow: hidden;
+    }
+    .status.success {
+      background: rgba(16, 185, 129, 0.15);
+      color: #166534;
+      border: 1px solid rgba(16, 185, 129, 0.3);
+    }
+    .status.error {
+      background: rgba(239, 68, 68, 0.15);
+      color: #991b1b;
+      border: 1px solid rgba(239, 68, 68, 0.3);
+    }
+    .refresh-btn {
+      width: 100%;
+      background: linear-gradient(135deg, #10b981 0%, #059669 100%);
+      color: white;
+      border: none;
+      padding: 14px;
+      border-radius: 12px;
+      cursor: pointer;
+      font-size: 11px;
+      font-weight: 700;
+      margin-top: 12px;
+      transition: all 0.25s cubic-bezier(0.4, 0, 0.2, 1);
+      box-shadow: 0 6px 20px rgba(16, 185, 129, 0.3);
+      letter-spacing: -0.3px;
+      backdrop-filter: blur(10px);
+      border: 1px solid rgba(255, 255, 255, 0.3);
+    }
+    .refresh-btn:hover {
+      transform: translateY(-3px);
+      box-shadow: 0 8px 24px rgba(16, 185, 129, 0.4);
+    }
+    .input-group {
+      margin-bottom: 14px;
+      background: rgba(255, 255, 255, 0.7);
+      border-radius: 16px;
+      padding: 16px;
+      box-shadow: 0 4px 16px rgba(0, 0, 0, 0.08);
+      backdrop-filter: blur(20px);
+      border: 1px solid rgba(255, 255, 255, 0.5);
+      transition: all 0.3s ease;
+    }
+    .input-group:hover {
+      box-shadow: 0 6px 24px rgba(0, 0, 0, 0.12);
+      transform: translateY(-1px);
+    }
+    .input-group label {
+      display: block;
+      margin-bottom: 8px;
+      color: #1e293b;
+      font-weight: 700;
+      font-size: 11px;
+      letter-spacing: -0.3px;
+    }
+    .input-group input {
+      width: 100%;
+      padding: 12px 14px;
+      border: 1px solid rgba(226, 232, 240, 0.8);
+      border-radius: 12px;
+      font-size: 11px;
+      transition: all 0.25s cubic-bezier(0.4, 0, 0.2, 1);
+      background: rgba(255, 255, 255, 0.8);
+      color: #1e293b;
+      backdrop-filter: blur(10px);
+    }
+    .input-group input:focus {
+      outline: none;
+      border-color: #3b82f6;
+      background: rgba(255, 255, 255, 0.95);
+      box-shadow: 0 0 0 4px rgba(59, 130, 246, 0.1);
+      transform: translateY(-1px);
+    }
+    .input-group textarea {
+      width: 100%;
+      padding: 12px 14px;
+      border: 1px solid rgba(226, 232, 240, 0.8);
+      border-radius: 12px;
+      font-size: 11px;
+      resize: vertical;
+      font-family: -apple-system, BlinkMacSystemFont, 'SF Pro Display', 'Segoe UI', Roboto, sans-serif;
+      transition: all 0.25s cubic-bezier(0.4, 0, 0.2, 1);
+      height: 70px;
+      background: rgba(255, 255, 255, 0.8);
+      color: #1e293b;
+      backdrop-filter: blur(10px);
+    }
+    .input-group textarea:focus {
+      outline: none;
+      border-color: #3b82f6;
+      background: rgba(255, 255, 255, 0.95);
+      box-shadow: 0 0 0 4px rgba(59, 130, 246, 0.1);
+      transform: translateY(-1px);
+    }
+    .result-box {
+      background: rgba(255, 255, 255, 0.7);
+      border: 1px solid rgba(226, 232, 240, 0.8);
+      border-radius: 16px;
+      padding: 16px;
+      margin-top: 12px;
+      box-shadow: 0 4px 16px rgba(0, 0, 0, 0.08);
+      backdrop-filter: blur(20px);
+      transition: all 0.3s ease;
+    }
+    .result-box:hover {
+      box-shadow: 0 6px 24px rgba(0, 0, 0, 0.12);
+      transform: translateY(-1px);
+    }
+    .result-label {
+      font-weight: 700;
+      color: #1e293b;
+      margin-bottom: 12px;
+      font-size: 11px;
+      letter-spacing: -0.3px;
+    }
+    .hidden {
+      display: none;
+    }
+    .region-tree {
+      list-style: none;
+      padding-left: 8px;
+      margin: 3px 0;
+    }
+    .region-item {
+      cursor: pointer;
+      padding: 6px 10px;
+      margin: 3px 0;
+      border-radius: 8px;
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      transition: all 0.2s ease;
+      font-size: 11px;
+      background: rgba(255, 255, 255, 0.6);
+      border: 1px solid rgba(226, 232, 240, 0.5);
+    }
+    .region-item:hover {
+      background: rgba(16, 185, 129, 0.1);
+      transform: translateX(2px);
+      box-shadow: 0 2px 8px rgba(16, 185, 129, 0.15);
+    }
+    .region-toggle {
+      font-size: 11px;
+      min-width: 12px;
+      color: #666;
+    }
+    .region-name {
+      font-weight: 700;
+      color: #1e293b;
+      flex: 1;
+      font-size: 11px;
+      letter-spacing: -0.2px;
+    }
+    .region-id {
+      color: #94a3b8;
+      font-size: 11px;
+    }
+    .no-data {
+      color: #94a3b8;
+      padding: 16px;
+      text-align: center;
+      background: rgba(255, 255, 255, 0.7);
+      border-radius: 12px;
+      font-size: 11px;
+      border: 1.5px dashed rgba(203, 213, 225, 0.8);
+      font-weight: 500;
+      backdrop-filter: blur(10px);
+    }
+    .region-radio {
+      margin-right: 6px;
+      cursor: pointer;
+      width: 14px;
+      height: 14px;
+      accent-color: #6366f1;
+    }
+    .query-btn {
+      background: linear-gradient(135deg, #3b82f6 0%, #60a5fa 100%);
+      color: white;
+      border: none;
+      padding: 10px 18px;
+      border-radius: 12px;
+      cursor: pointer;
+      font-size: 11px;
+      font-weight: 700;
+      white-space: nowrap;
+      transition: all 0.25s cubic-bezier(0.4, 0, 0.2, 1);
+      box-shadow: 0 6px 20px rgba(59, 130, 246, 0.3);
+      letter-spacing: -0.3px;
+      backdrop-filter: blur(10px);
+      border: 1px solid rgba(255, 255, 255, 0.3);
+    }
+    .query-btn:hover {
+      transform: translateY(-3px);
+      box-shadow: 0 8px 24px rgba(59, 130, 246, 0.4);
+    }
+    .data-table {
+      width: 100%;
+      border-collapse: collapse;
+      margin-top: 10px;
+      border-radius: 12px;
+      overflow: hidden;
+      box-shadow: 0 4px 16px rgba(0, 0, 0, 0.08);
+      background: rgba(255, 255, 255, 0.8);
+      backdrop-filter: blur(10px);
+      border: 1px solid rgba(226, 232, 240, 0.5);
+    }
+    .data-table th,
+    .data-table td {
+      padding: 12px 14px;
+      text-align: left;
+      border-bottom: 1px solid rgba(226, 232, 240, 0.5);
+      font-size: 11px;
+    }
+    .data-table th {
+      background: linear-gradient(135deg, rgba(248, 250, 252, 0.9) 0%, rgba(241, 245, 249, 0.9) 100%);
+      font-weight: 700;
+      color: #1e293b;
+      font-size: 11px;
+      letter-spacing: -0.2px;
+      text-transform: uppercase;
+      backdrop-filter: blur(10px);
+    }
+    .data-table tr:hover {
+      background: rgba(59, 130, 246, 0.05);
+    }
+    .data-table tr:last-child td {
+      border-bottom: none;
+    }
+    
+    /* 自定义滚动条样式 */
+    ::-webkit-scrollbar {
+      width: 6px;
+      height: 6px;
+    }
+    ::-webkit-scrollbar-track {
+      background: rgba(226, 232, 240, 0.5);
+      border-radius: 3px;
+      backdrop-filter: blur(10px);
+    }
+    ::-webkit-scrollbar-thumb {
+      background: rgba(148, 163, 184, 0.6);
+      border-radius: 3px;
+      backdrop-filter: blur(10px);
+      transition: all 0.2s ease;
+    }
+    ::-webkit-scrollbar-thumb:hover {
+      background: rgba(100, 116, 139, 0.8);
+    }
+    
+    /* 液态玻璃效果增强 */
+    .stop-btn {
+      background: linear-gradient(135deg, #ef4444 0%, #dc2626 100%);
+      color: white;
+      border: none;
+      padding: 6px 12px;
+      border-radius: 10px;
+      cursor: pointer;
+      font-size: 11px;
+      font-weight: 700;
+      box-shadow: 0 4px 12px rgba(239, 68, 68, 0.25);
+      letter-spacing: -0.2px;
+      display: none;
+      transition: all 0.25s cubic-bezier(0.4, 0, 0.2, 1);
+      backdrop-filter: blur(10px);
+      border: 1px solid rgba(255, 255, 255, 0.3);
+    }
+    .stop-btn:hover {
+      transform: translateY(-2px);
+      box-shadow: 0 6px 20px rgba(239, 68, 68, 0.35);
+    }
+    
+    /* 拖放区域样式 */
+    #dropZone,
+    #dropZoneQuery {
+      border: 2px dashed rgba(203, 213, 225, 0.8);
+      border-radius: 12px;
+      padding: 20px;
+      text-align: center;
+      margin: 10px 0;
+      background: rgba(255, 255, 255, 0.6);
+      cursor: pointer;
+      transition: all 0.3s ease;
+      backdrop-filter: blur(10px);
+    }
+    #dropZone:hover,
+    #dropZoneQuery:hover {
+      border-color: #3b82f6;
+      background: rgba(255, 255, 255, 0.8);
+      box-shadow: 0 4px 16px rgba(59, 130, 246, 0.15);
+    }
+  </style>
+</head>
+<body>
+  <div class="header-section">
+    <h2 style="display: flex; align-items: center; justify-content: center; gap: 8px;"><img src="icons/icon.png" alt="图标" style="width: 24px; height: 24px; border-radius: 4px;"> 天翼视联Chrome助手</h2>
+    
+    <div id="status" class="status hidden"></div>
+    
+    <div class="tab-container">
+      <button class="tab-btn active" data-tab="userInfo">用户信息</button>
+      <button class="tab-btn" data-tab="batchCascade">批量级联功能</button>
+      <button class="tab-btn" data-tab="batchQuery">批量设备查询</button>
+      <button class="tab-btn" data-tab="deviceList">设备清单查询</button>
+      <button class="tab-btn" data-tab="qualityMonitor">画质监测</button>
+    </div>
+  </div>
+  
+  <!-- 用户信息页面 -->
+  <div id="userInfo" class="page active">
+    <div class="section">
+      <div class="section-title">
+        <span>🍪 Cookie (Python格式)</span>
+        <button class="copy-btn" data-target="cookieFormat">复制</button>
+      </div>
+      <div id="cookieFormat" class="content-box">-</div>
+    </div>
+    
+    <div class="section">
+      <div class="section-title">
+        <span>👤 用户ID (userId)</span>
+        <button class="copy-btn" data-target="userIdDisplay">复制</button>
+      </div>
+      <div id="userIdDisplay" class="content-box">-</div>
+    </div>
+    
+    <div class="section">
+      <div class="section-title">
+        <span>📱 管理员账号</span>
+        <button class="copy-btn" data-target="accountDisplay">复制</button>
+      </div>
+      <div id="accountDisplay" class="content-box">-</div>
+    </div>
+    
+    <button id="refreshBtn" class="refresh-btn">🔄 刷新数据</button>
+  </div>
+  
+  <!-- 批量级联功能页面 -->
+  <div id="batchCascade" class="page">
+    <div class="input-group">
+      <label for="enteraccount">请输入需要汇聚的手机号:</label>
+      <div style="display: flex; gap: 10px;">
+        <input type="text" id="enteraccount" placeholder="请输入账号" style="flex: 1;">
+        <button id="queryBtn" class="query-btn">查询</button>
+      </div>
+    </div>
+    
+    <div id="regionResult" class="result-box hidden">
+      <div class="result-label">区域代码 (regionCode):</div>
+      <div id="regionCode" class="content-box">-</div>
+    </div>
+    
+    <div id="customListResult" class="result-box hidden">
+      <div class="result-label">查询结果:</div>
+      <div id="customList" class="content-box">-</div>
+    </div>
+    
+    <div id="levelCusRegionResult" class="result-box hidden">
+      <div class="result-label">监控目录:</div>
+      <div id="levelCusRegion" class="content-box">-</div>
+    </div>
+    
+
+    
+    <div class="input-group">
+      <label id="deviceCodesLabel" for="deviceCodes">设备编码 (多个用逗号分隔):</label>
+      <textarea id="deviceCodes" rows="3" placeholder="请输入设备编码，多个用逗号分隔"></textarea>
+    </div>
+    
+    <div class="input-group">
+      <label id="uploadFileLabel">或上传CSV文件:</label>
+      <div id="dropZone" style="border: 2px dashed #ddd; border-radius: 4px; padding: 20px; text-align: center; margin: 10px 0; background: #f9f9f9; cursor: pointer;">
+        <p>📁 拖放CSV文件到此处</p>
+        <p style="font-size: 10px; color: #999; margin-top: 5px;">或点击选择文件</p>
+        <input type="file" id="excelFile" accept=".csv" style="display: none;">
+      </div>
+      <div style="text-align: center; margin-top: 5px;">
+        <a href="#" id="downloadTemplate" style="font-size: 10px; color: #4285f4; text-decoration: none;">📄 下载CSV模板</a>
+      </div>
+    </div>
+    
+    <div id="uploadStats" class="result-box hidden">
+      <div class="result-label">CSV文件上传统计:</div>
+      <div id="uploadStatsContent" class="content-box">-</div>
+    </div>
+    
+
+    
+    <div style="display: flex; gap: 8px; margin-top: 10px;">
+      <button id="createCascadeTaskBtn" class="refresh-btn" style="flex: 1;">📝 创建级联任务</button>
+      <button id="clearCascadeDataBtn" class="refresh-btn" style="flex: 1; background: linear-gradient(135deg, #ef4444 0%, #dc2626 100%);">🗑️ 清除数据</button>
+    </div>
+    
+    <div id="cascadeTaskResult" class="result-box hidden">
+      <div class="result-label">级联任务结果:</div>
+      <div id="cascadeTask" class="content-box">-</div>
+    </div>
+  </div>
+  
+  <!-- 批量设备查询页面 -->
+  <div id="batchQuery" class="page">
+    <div class="input-group">
+      <label id="deviceCodesLabelQuery" for="deviceCodesQuery">设备编码 (多个用逗号分隔):</label>
+      <textarea id="deviceCodesQuery" rows="3" placeholder="请输入设备编码，多个用逗号分隔"></textarea>
+    </div>
+    
+    <div class="input-group">
+      <label id="uploadFileLabelQuery">或上传CSV文件:</label>
+      <div id="dropZoneQuery" style="border: 2px dashed #ddd; border-radius: 4px; padding: 20px; text-align: center; margin: 10px 0; background: #f9f9f9; cursor: pointer;">
+        <p>📁 拖放CSV文件到此处</p>
+        <p style="font-size: 10px; color: #999; margin-top: 5px;">或点击选择文件</p>
+        <input type="file" id="excelFileQuery" accept=".csv" style="display: none;">
+      </div>
+      <div style="text-align: center; margin-top: 5px;">
+        <a href="#" id="downloadTemplateQuery" style="font-size: 10px; color: #4285f4; text-decoration: none;">📄 下载CSV模板</a>
+      </div>
+    </div>
+    
+    <div id="uploadStatsQuery" class="result-box hidden">
+      <div class="result-label">CSV文件上传统计:</div>
+      <div id="uploadStatsContentQuery" class="content-box">-</div>
+    </div>
+    
+    <div style="display: flex; gap: 8px; margin-top: 10px;">
+      <button id="queryDeviceStatusBtn" class="refresh-btn" style="flex: 1;">🔍 查询设备在线状态</button>
+      <button id="clearQueryDataBtn" class="refresh-btn" style="flex: 1; background: linear-gradient(135deg, #ef4444 0%, #dc2626 100%);">🗑️ 清除数据</button>
+    </div>
+    
+    <div id="deviceStatusProgress" class="progress-container hidden">
+      <div class="progress-label">
+        <span>📊 查询进度</span>
+        <div style="display: flex; align-items: center; gap: 8px;">
+          <span id="deviceStatusProgressPercent">0%</span>
+          <button id="stopDeviceStatusQueryBtn" class="stop-btn" style="background: linear-gradient(135deg, #ef4444 0%, #dc2626 100%); color: white; border: none; padding: 6px 12px; border-radius: 8px; cursor: pointer; font-size: 11px; font-weight: 700; box-shadow: 0 2px 8px rgba(239, 68, 68, 0.25); letter-spacing: -0.2px; display: none;">❌ 停止</button>
+        </div>
+      </div>
+      <div class="progress-bar">
+        <div id="deviceStatusProgressFill" class="progress-fill"></div>
+      </div>
+      <div id="deviceStatusProgressText" class="progress-text">正在初始化...</div>
+    </div>
+    
+    <div id="deviceStatusResult" class="hidden">
+      <div id="deviceStatus">-</div>
+    </div>
+  </div>
+  
+  <!-- 设备清单查询页面 -->
+  <div id="deviceList" class="page">
+    <div class="input-group">
+      <label for="deviceListAccount">请输入账号:</label>
+      <div style="display: flex; gap: 10px;">
+        <input type="text" id="deviceListAccount" placeholder="请输入11位手机号" style="flex: 1;">
+        <button id="queryCustomListBtn" class="query-btn">查询企业主</button>
+      </div>
+    </div>
+    
+    <div id="customListResultDeviceList" class="result-box hidden">
+      <div class="result-label">角色列表（选择要查询的角色）:</div>
+      <div id="customListDeviceList" class="content-box" style="max-height: 80px;">-</div>
+    </div>
+    
+    <div id="deviceListProgress" class="progress-container hidden">
+      <div class="progress-label">
+        <span>📊 查询进度</span>
+        <div style="display: flex; align-items: center; gap: 8px;">
+          <span id="progressPercent">0%</span>
+          <button id="stopQueryBtn" class="stop-btn" style="background: linear-gradient(135deg, #ef4444 0%, #dc2626 100%); color: white; border: none; padding: 6px 12px; border-radius: 8px; cursor: pointer; font-size: 11px; font-weight: 700; box-shadow: 0 2px 8px rgba(239, 68, 68, 0.25); letter-spacing: -0.2px; display: none;">❌ 停止</button>
+        </div>
+      </div>
+      <div class="progress-bar">
+        <div id="progressFill" class="progress-fill"></div>
+      </div>
+      <div id="progressText" class="progress-text">正在初始化...</div>
+    </div>
+    
+    <div style="display: flex; gap: 8px; margin-top: 10px;">
+      <button id="queryDeviceListBtn" class="refresh-btn" style="flex: 1;">🔍 查询设备清单</button>
+      <button id="clearDeviceListBtn" class="refresh-btn" style="flex: 1; background: linear-gradient(135deg, #ef4444 0%, #dc2626 100%);">🗑️ 清除数据</button>
+    </div>
+    
+    <div id="deviceListResult" style="margin-top: 12px; display: none;">
+      <div id="deviceListContent" style="max-height: 150px; overflow-y: auto;">-</div>
+    </div>
+  </div>
+  
+  <!-- 画质监测功能页面 -->
+  <div id="qualityMonitor" class="page">
+    <div class="input-group">
+      <label for="deviceCodeQuality">设备编码:</label>
+      <input type="text" id="deviceCodeQuality" placeholder="请输入设备编码">
+    </div>
+    
+    <div style="display: flex; gap: 8px; margin-top: 10px;">
+      <button id="queryQualityBtn" class="refresh-btn" style="flex: 1;">🔍 查询画质</button>
+      <button id="clearQualityDataBtn" class="refresh-btn" style="flex: 1; background: linear-gradient(135deg, #ef4444 0%, #dc2626 100%);">🗑️ 清除数据</button>
+    </div>
+    
+    <div id="qualityProgress" class="progress-container hidden">
+      <div class="progress-label">
+        <span>📊 查询进度</span>
+        <div style="display: flex; align-items: center; gap: 8px;">
+          <span id="qualityProgressPercent">0%</span>
+        </div>
+      </div>
+      <div class="progress-bar">
+        <div id="qualityProgressFill" class="progress-fill"></div>
+      </div>
+      <div id="qualityProgressText" class="progress-text">正在初始化...</div>
+    </div>
+    
+    <div id="qualityResult" style="margin-top: 12px; display: none;">
+      <div style="margin-bottom: 14px; padding: 16px; background: rgba(255, 255, 255, 0.7); border-radius: 16px; box-shadow: 0 4px 16px rgba(0, 0, 0, 0.08); backdrop-filter: blur(20px); border: 1px solid rgba(255, 255, 255, 0.5); transition: all 0.3s ease;">
+        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px;">
+          <strong style="font-size: 11px; color: #1e293b; font-weight: 700; letter-spacing: -0.3px;">画质监测结果:</strong>
+        </div>
+        <div id="qualityImageContainer" style="display: flex; justify-content: center; align-items: center; padding: 20px; background: rgba(248, 250, 252, 0.9); border-radius: 12px; border: 1px solid rgba(226, 232, 240, 0.5);">
+          <img id="qualityImage" src="" alt="设备截图" style="max-width: 100%; max-height: 300px; border-radius: 8px; box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);">
+        </div>
+        <div id="qualityError" style="text-align: center; padding: 20px; color: #ef4444; font-size: 11px; font-weight: 600; display: none;"></div>
+      </div>
+    </div>
+  </div>
+  
+  <div class="footer-section">
+    <div style="text-align: center; color: #94a3b8; font-size: 11px; font-weight: 600; letter-spacing: -0.2px;">
+      <span>Version 3.0.1</span>
+      <span style="margin: 0 10px; opacity: 0.5;">|</span>
+      <span style="background: linear-gradient(135deg, #3b82f6 0%, #60a5fa 100%); -webkit-background-clip: text; -webkit-text-fill-color: transparent; background-clip: text; font-weight: 800; font-size: 12px; letter-spacing: 0.3px;">👨‍💻 乐山云中台梁勇</span>
+    </div>
+  </div>
+  
+  <!-- 图片放大模态框 -->
+  <div id="imageModal" style="position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0, 0, 0, 0.9); z-index: 1000; display: none; justify-content: center; align-items: center;">
+    <div style="position: relative; width: 90%; height: 90%; display: flex; justify-content: center; align-items: center;">
+      <img id="modalImage" src="" alt="放大图片" style="max-width: 100%; max-height: 100%; object-fit: contain; border-radius: 8px;">
+      <button id="closeModal" style="position: absolute; top: -40px; right: -20px; background: rgba(255, 255, 255, 0.2); color: white; border: none; border-radius: 50%; width: 30px; height: 30px; font-size: 20px; cursor: pointer; backdrop-filter: blur(10px);">×</button>
+    </div>
+  </div>
+  
+  <script src="popup.js"></script>
+</body>
+</html>

@@ -427,9 +427,23 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
     
     const deviceStatusList = [];
     const deviceInfoMap = new Map();
+    let processedCount = 0;
+    const totalCount = deviceCodes.length;
+    
+    // 发送进度更新
+    function sendProgressUpdate(current, deviceCode) {
+      const progress = Math.round((current / totalCount) * 100);
+      chrome.runtime.sendMessage({ 
+        action: 'deviceStatusProgress', 
+        progress: progress, 
+        current: current, 
+        total: totalCount, 
+        deviceCode: deviceCode 
+      });
+    }
     
     // 第一步：逐个获取设备信息
-    const fetchPromises = deviceCodes.map(deviceCode => {
+    const fetchPromises = deviceCodes.map((deviceCode, index) => {
       const params = new URLSearchParams({
         deviceCode: deviceCode,
         size: '20',
@@ -461,10 +475,7 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
             online: false,
             message: '设备编码有误'
           });
-          return;
-        }
-        
-        if (result && result.data && result.data.length > 0) {
+        } else if (result && result.data && result.data.length > 0) {
           const deviceInfo = result.data[0];
           deviceInfoMap.set(deviceCode, {
             deviceName: deviceInfo.deviceName || deviceInfo.name || '',
@@ -502,6 +513,10 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
           online: false,
           message: '设备编码有误'
         });
+      })
+      .finally(() => {
+        processedCount++;
+        sendProgressUpdate(processedCount, deviceCode);
       });
     });
     
@@ -587,6 +602,91 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
         
         sendResponse({ success: true, deviceStatusList: deviceStatusList });
       });
+    });
+    
+    return true;
+  }
+  
+  if (request.action === 'getEnterpriseUserDeviceList') {
+    const { userId, pageNo, pageSize } = request;
+    const url = 'https://vcp.21cn.com/vcpCamera/device/getEnterpriseUserDeviceList';
+    
+    const params = new URLSearchParams({
+      userId: userId,
+      pageNo: pageNo,
+      pageSize: pageSize
+    });
+    
+    const headers = {
+      'Accept': 'application/json, text/plain, */*',
+      'Accept-Language': 'zh-CN,zh;q=0.9'
+    };
+    
+    console.log('Content Script发送请求:', url);
+    console.log('请求参数:', params.toString());
+    
+    fetch(`${url}?${params.toString()}`, {
+      method: 'GET',
+      headers: headers,
+      credentials: 'same-origin'
+    })
+    .then(response => response.json())
+    .then(result => {
+      console.log('Content Script响应:', result);
+      
+      sendResponse({ success: true, data: result });
+    })
+    .catch(err => {
+      console.error('Content Script请求失败:', err);
+      sendResponse({ success: false, error: err.message });
+    });
+    
+    return true;
+  }
+  
+  if (request.action === 'getDeviceScreenShot') {
+    const { deviceCode } = request;
+    const url = `https://vcp.21cn.com/vcpCamera/tag/getDeviceScreenShot?deviceCode=${deviceCode}`;
+    
+    const headers = {
+      'Accept': 'application/json, text/plain, */*',
+      'Accept-Language': 'zh-CN,zh;q=0.9'
+    };
+    
+    console.log('Content Script发送请求:', url);
+    
+    fetch(url, {
+      method: 'GET',
+      headers: headers,
+      credentials: 'same-origin'
+    })
+    .then(response => {
+      console.log('Content Script响应状态:', response.status);
+      console.log('Content Script响应URL:', response.url);
+      
+      // 检查响应是否是重定向到登录页面
+      if (response.url.includes('unifyAccountLogout.do')) {
+        return Promise.reject(new Error('需要登录'));
+      }
+      
+      // 尝试解析为JSON
+      return response.json();
+    })
+    .then(data => {
+      console.log('Content Script响应数据:', data);
+      
+      // 检查是否包含data字段，且data是一个图片地址
+      if (data && data.data && (data.data.startsWith('http://') || data.data.startsWith('https://'))) {
+        const imageUrl = data.data;
+        console.log('设备截图URL:', imageUrl);
+        sendResponse({ success: true, imageUrl: imageUrl });
+      } else {
+        throw new Error(data.msg || '查询失败，未获取到图片地址');
+      }
+    })
+    .catch(err => {
+      console.error('Content Script请求失败:', err);
+      sendResponse({ success: false, error: err.message });
     });
     
     return true;
