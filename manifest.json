@@ -1,8 +1,8 @@
 {
   "manifest_version": 3,
   "name": "天翼视联助手",
-  "version": "1.0.0",
-  "description": "天翼视联助手 - 企业主监控目录管理和设备级联任务管理",
+  "version": "3.0.1",
+  "description": "天翼视联助手 - 依托监控平台打造的扩展功能",
   "permissions": [
     "storage",
     "activeTab",
