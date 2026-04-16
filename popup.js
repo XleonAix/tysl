@@ -617,45 +617,126 @@ async function createCascadeTask() {
       return;
     }
     
-    console.log('发送createCascadeTask消息...');
-    const response = await chrome.tabs.sendMessage(tab.id, { 
-      action: 'createCascadeTask',
-      userId: userId,
-      account: account,
-      deviceList: deviceList
-    });
+    // 显示级联进度
+    const progressContainer = document.createElement('div');
+    progressContainer.id = 'cascadeProgress';
+    progressContainer.style.cssText = `
+      margin: 16px 0;
+      padding: 16px;
+      background: rgba(255, 255, 255, 0.8);
+      border-radius: 12px;
+      box-shadow: 0 4px 16px rgba(0, 0, 0, 0.08);
+      backdrop-filter: blur(10px);
+      border: 1px solid rgba(226, 232, 240, 0.5);
+    `;
     
-    console.log('收到createCascadeTask响应:', response);
+    const progressBar = document.createElement('div');
+    progressBar.style.cssText = `
+      width: 100%;
+      height: 8px;
+      background: rgba(226, 232, 240, 0.5);
+      border-radius: 4px;
+      overflow: hidden;
+      margin-bottom: 8px;
+    `;
     
-    // 无论成功失败，都处理级联结果
-    const resultData = response.data;
-    const cascadeResults = response.cascadeResults || [];
+    const progressFill = document.createElement('div');
+    progressFill.style.cssText = `
+      width: 0%;
+      height: 100%;
+      background: linear-gradient(90deg, #3b82f6 0%, #60a5fa 100%);
+      border-radius: 4px;
+      transition: width 0.3s ease;
+    `;
     
-    console.log('级联任务结果:', resultData);
-    console.log('级联详细结果:', cascadeResults);
+    const progressText = document.createElement('div');
+    progressText.style.cssText = `
+      font-size: 10px;
+      color: #475569;
+      text-align: center;
+      font-weight: 600;
+    `;
+    progressText.textContent = '准备级联...';
+    
+    progressBar.appendChild(progressFill);
+    progressContainer.appendChild(progressBar);
+    progressContainer.appendChild(progressText);
+    
+    document.getElementById('cascadeTaskResult').style.display = 'block';
+    document.getElementById('cascadeTask').innerHTML = '';
+    document.getElementById('cascadeTask').appendChild(progressContainer);
+    
+    // 每5个设备一批级联
+    const batchSize = 5;
+    const allCascadeResults = [];
+    const totalBatches = Math.ceil(deviceList.length / batchSize);
+    
+    console.log('开始分批级联...');
+    console.log(`总设备数: ${deviceList.length}, 每批${batchSize}个, 共${totalBatches}批`);
+    
+    for (let i = 0; i < deviceList.length; i += batchSize) {
+      const batchDevices = deviceList.slice(i, i + batchSize);
+      const batchNumber = Math.floor(i / batchSize) + 1;
+      
+      console.log(`处理第${batchNumber}批，设备数量: ${batchDevices.length}`);
+      
+      // 更新进度
+      const progress = Math.round((i / deviceList.length) * 100);
+      progressFill.style.width = `${progress}%`;
+      progressText.textContent = `级联中... (${i}/${deviceList.length})`;
+      
+      try {
+        console.log(`发送第${batchNumber}批createCascadeTask消息...`);
+        const response = await chrome.tabs.sendMessage(tab.id, { 
+          action: 'createCascadeTask',
+          userId: userId,
+          account: account,
+          deviceList: batchDevices
+        });
+        
+        console.log(`收到第${batchNumber}批createCascadeTask响应:`, response);
+        
+        // 收集级联结果
+        if (response.cascadeResults && response.cascadeResults.length > 0) {
+          allCascadeResults.push(...response.cascadeResults);
+        } else {
+          // 如果没有cascadeResults，根据响应状态生成默认结果
+          const isApiSuccess = response.success && (response.data?.code === 20000 || response.data?.code === 0 || response.data?.code === 200);
+          const defaultResults = batchDevices.map(device => ({
+            deviceCode: device.deviceCode,
+            regionId: device.regionId,
+            regionName: device.regionName,
+            deviceName: device.deviceName,
+            success: isApiSuccess,
+            message: isApiSuccess ? '级联成功' : (response.error || response.data?.msg || '级联失败')
+          }));
+          allCascadeResults.push(...defaultResults);
+        }
+      } catch (error) {
+        console.error(`第${batchNumber}批级联失败:`, error);
+        // 为这批设备生成失败结果
+        const errorResults = batchDevices.map(device => ({
+          deviceCode: device.deviceCode,
+          regionId: device.regionId,
+          regionName: device.regionName,
+          deviceName: device.deviceName,
+          success: false,
+          message: '级联请求失败: ' + error.message
+        }));
+        allCascadeResults.push(...errorResults);
+      }
+    }
+    
+    // 更新进度为100%
+    progressFill.style.width = '100%';
+    progressText.textContent = `级联完成! (${deviceList.length}/${deviceList.length})`;
+    
+    console.log('所有批次级联完成');
+    console.log('总级联结果数量:', allCascadeResults.length);
     
     // 分类成功和失败的设备
-    let successDevices = cascadeResults.filter(item => item.success);
-    let failedDevices = cascadeResults.filter(item => !item.success);
-    
-    // 如果没有cascadeResults，根据响应状态生成默认结果
-    if (cascadeResults.length === 0) {
-      const isApiSuccess = response.success && (resultData?.code === 20000 || resultData?.code === 0 || resultData?.code === 200);
-      const defaultResults = deviceList.map(device => ({
-        deviceCode: device.deviceCode,
-        regionId: device.regionId,
-        regionName: device.regionName,
-        deviceName: device.deviceName,
-        success: isApiSuccess,
-        message: isApiSuccess ? '级联成功' : (response.error || resultData?.msg || '级联失败')
-      }));
-      
-      successDevices = defaultResults.filter(item => item.success);
-      failedDevices = defaultResults.filter(item => !item.success);
-      
-      console.log('生成默认结果 - 成功设备:', successDevices.length);
-      console.log('生成默认结果 - 失败设备:', failedDevices.length);
-    }
+    let successDevices = allCascadeResults.filter(item => item.success);
+    let failedDevices = allCascadeResults.filter(item => !item.success);
     
     // 添加获取设备信息失败的设备到失败列表
     const deviceInfoFailedDevices = failedDeviceCodes.map(code => ({
@@ -1290,6 +1371,20 @@ function clearCascadeData() {
     uploadFileGroup.style.display = 'block';
   }
   
+  // 确保上传文件标签和控件都显示
+  const uploadFileLabel = document.getElementById('uploadFileLabel');
+  const dropZone = document.getElementById('dropZone');
+  const downloadTemplate = document.getElementById('downloadTemplate');
+  if (uploadFileLabel) {
+    uploadFileLabel.style.display = 'block';
+  }
+  if (dropZone) {
+    dropZone.style.display = 'block';
+  }
+  if (downloadTemplate) {
+    downloadTemplate.style.display = 'block';
+  }
+  
   // 隐藏结果区域
   document.getElementById('regionResult').classList.add('hidden');
   document.getElementById('customListResult').classList.add('hidden');
@@ -1297,12 +1392,19 @@ function clearCascadeData() {
   document.getElementById('uploadStats').classList.add('hidden');
   document.getElementById('cascadeTaskResult').classList.add('hidden');
   
+  // 确保结果区域使用display: none隐藏（因为在查询过程中使用了style.display = 'block'）
+  document.getElementById('regionResult').style.display = 'none';
+  document.getElementById('customListResult').style.display = 'none';
+  document.getElementById('levelCusRegionResult').style.display = 'none';
+  document.getElementById('uploadStats').style.display = 'none';
+  document.getElementById('cascadeTaskResult').style.display = 'none';
+  
   // 清空结果内容
   document.getElementById('regionCode').textContent = '-';
   document.getElementById('customList').textContent = '-';
   document.getElementById('levelCusRegion').textContent = '-';
   document.getElementById('uploadStatsContent').textContent = '-';
-  document.getElementById('cascadeTask').textContent = '-';
+  document.getElementById('cascadeTask').innerHTML = '';
   
   // 清除状态信息
   const status = document.getElementById('status');
