@@ -447,23 +447,21 @@ async function processCSVFile(file) {
     
     // 显示上传统计信息
     const uploadStatsHtml = `
-      <div style="margin-bottom: 14px; padding: 16px; background: rgba(255, 255, 255, 0.7); border-radius: 16px; box-shadow: 0 4px 16px rgba(0, 0, 0, 0.08); backdrop-filter: blur(20px); border: 1px solid rgba(255, 255, 255, 0.5); transition: all 0.3s ease;">
-        <div style="overflow-x: auto;">
-          <table class="data-table" style="margin-top: 8px; width: 100%; border-collapse: collapse; border-radius: 12px; overflow: hidden; box-shadow: 0 4px 16px rgba(0, 0, 0, 0.08); background: rgba(255, 255, 255, 0.8); backdrop-filter: blur(10px); border: 1px solid rgba(226, 232, 240, 0.5);">
-            <tr style="background: linear-gradient(135deg, rgba(248, 250, 252, 0.9) 0%, rgba(241, 245, 249, 0.9) 100%); border-bottom: 1px solid rgba(226, 232, 240, 0.5); backdrop-filter: blur(10px);">
-              <th style="padding: 12px 14px; text-align: left; border: 1px solid rgba(226, 232, 240, 0.5); font-weight: 700; font-size: 9px; color: #1e293b; letter-spacing: -0.2px; text-transform: uppercase;">总上传条数</th>
-              <th style="padding: 12px 14px; text-align: left; border: 1px solid rgba(226, 232, 240, 0.5); font-weight: 700; font-size: 9px; color: #1e293b; letter-spacing: -0.2px; text-transform: uppercase;">重复条数</th>
-              <th style="padding: 12px 14px; text-align: left; border: 1px solid rgba(226, 232, 240, 0.5); font-weight: 700; font-size: 9px; color: #1e293b; letter-spacing: -0.2px; text-transform: uppercase;">有效条数</th>
-            </tr>
-            <tr style="border-bottom: 1px solid rgba(226, 232, 240, 0.5); transition: all 0.2s ease; font-size: 10px;">
-              <td style="padding: 12px 14px; border: 1px solid rgba(226, 232, 240, 0.5); color: #475569; font-weight: 500;">${result.totalUpload}</td>
-              <td style="padding: 12px 14px; border: 1px solid rgba(226, 232, 240, 0.5); color: #c5221f; font-weight: 600;">${result.duplicateCount}</td>
-              <td style="padding: 12px 14px; border: 1px solid rgba(226, 232, 240, 0.5); color: #137333; font-weight: 600;">${result.validCount}</td>
-            </tr>
-          </table>
-        </div>
-        <button id="reuploadBtn" style="margin-top: 12px; width: 100%; background: linear-gradient(135deg, #3b82f6 0%, #60a5fa 100%); color: white; border: none; padding: 10px; border-radius: 10px; cursor: pointer; font-size: 11px; font-weight: 700; box-shadow: 0 4px 12px rgba(59, 130, 246, 0.25); letter-spacing: -0.2px; backdrop-filter: blur(10px); border: 1px solid rgba(255, 255, 255, 0.3); transition: all 0.25s ease;">🔄 重新上传</button>
+      <div style="overflow-x: auto;">
+        <table class="data-table" style="margin-top: 8px; width: 100%; border-collapse: collapse; border-radius: 12px; overflow: hidden; box-shadow: 0 4px 16px rgba(0, 0, 0, 0.08); background: rgba(255, 255, 255, 0.8); backdrop-filter: blur(10px); border: 1px solid rgba(226, 232, 240, 0.5);">
+          <tr style="background: linear-gradient(135deg, rgba(248, 250, 252, 0.9) 0%, rgba(241, 245, 249, 0.9) 100%); border-bottom: 1px solid rgba(226, 232, 240, 0.5); backdrop-filter: blur(10px);">
+            <th style="padding: 12px 14px; text-align: left; border: 1px solid rgba(226, 232, 240, 0.5); font-weight: 700; font-size: 9px; color: #1e293b; letter-spacing: -0.2px; text-transform: uppercase;">总上传条数</th>
+            <th style="padding: 12px 14px; text-align: left; border: 1px solid rgba(226, 232, 240, 0.5); font-weight: 700; font-size: 9px; color: #1e293b; letter-spacing: -0.2px; text-transform: uppercase;">重复条数</th>
+            <th style="padding: 12px 14px; text-align: left; border: 1px solid rgba(226, 232, 240, 0.5); font-weight: 700; font-size: 9px; color: #1e293b; letter-spacing: -0.2px; text-transform: uppercase;">有效条数</th>
+          </tr>
+          <tr style="border-bottom: 1px solid rgba(226, 232, 240, 0.5); transition: all 0.2s ease; font-size: 10px;">
+            <td style="padding: 12px 14px; border: 1px solid rgba(226, 232, 240, 0.5); color: #475569; font-weight: 500;">${result.totalUpload}</td>
+            <td style="padding: 12px 14px; border: 1px solid rgba(226, 232, 240, 0.5); color: #c5221f; font-weight: 600;">${result.duplicateCount}</td>
+            <td style="padding: 12px 14px; border: 1px solid rgba(226, 232, 240, 0.5); color: #137333; font-weight: 600;">${result.validCount}</td>
+          </tr>
+        </table>
       </div>
+      <button id="reuploadBtn" style="margin-top: 12px; width: 100%; background: linear-gradient(135deg, #3b82f6 0%, #60a5fa 100%); color: white; border: none; padding: 10px; border-radius: 10px; cursor: pointer; font-size: 11px; font-weight: 700; box-shadow: 0 4px 12px rgba(59, 130, 246, 0.25); letter-spacing: -0.2px; backdrop-filter: blur(10px); border: 1px solid rgba(255, 255, 255, 0.3); transition: all 0.25s ease;">🔄 重新上传</button>
     `;
     
     document.getElementById('uploadStats').style.display = 'block';
@@ -565,7 +563,7 @@ async function createCascadeTask() {
         return;
       }
     } else if (deviceCodesInput) {
-      deviceCodeArray = deviceCodesInput.split(',').map(code => code.trim()).filter(code => code);
+      deviceCodeArray = deviceCodesInput.split(/\n|\r\n/).map(code => code.trim()).filter(code => code);
       console.log('手动输入的设备编码:', deviceCodeArray);
       
       // 隐藏上传文件的控件及其标签
@@ -681,39 +679,40 @@ async function createCascadeTask() {
     console.log('总设备数:', allDevices.length);
     
     const resultHtml = allDevices.length > 0 ? `
-      <div style="margin-bottom: 14px; padding: 16px; background: rgba(255, 255, 255, 0.7); border-radius: 16px; box-shadow: 0 4px 16px rgba(0, 0, 0, 0.08); backdrop-filter: blur(20px); border: 1px solid rgba(255, 255, 255, 0.5); transition: all 0.3s ease;">
-        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px;">
+      <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px;">
+        <div style="display: flex; align-items: center; gap: 12px;">
           <strong style="font-size: 11px; color: #1e293b; font-weight: 700; letter-spacing: -0.3px;">级联任务结果 (共${allDevices.length}台):</strong>
-            <button id="exportCascadeBtn" style="background: linear-gradient(135deg, #3b82f6 0%, #60a5fa 100%); color: white; border: none; padding: 8px 14px; border-radius: 10px; cursor: pointer; font-size: 10px; font-weight: 700; box-shadow: 0 4px 12px rgba(59, 130, 246, 0.25); letter-spacing: -0.2px; backdrop-filter: blur(10px); border: 1px solid rgba(255, 255, 255, 0.3); transition: all 0.25s ease;">📥 导出清单</button>
+          <div style="display: flex; gap: 16px; font-size: 11px; font-weight: 600;">
+            <div style="color: #137333;">成功: ${successDevices.length}台</div>
+            <div style="color: #c5221f;">失败: ${failedDevices.length}台</div>
+          </div>
         </div>
-        <div style="overflow-x: auto;">
-          <table class="data-table" style="margin-top: 8px; width: 100%; border-collapse: collapse; border-radius: 12px; overflow: hidden; box-shadow: 0 4px 16px rgba(0, 0, 0, 0.08); background: rgba(255, 255, 255, 0.8); backdrop-filter: blur(10px); border: 1px solid rgba(226, 232, 240, 0.5);">
-            <tr style="background: linear-gradient(135deg, rgba(248, 250, 252, 0.9) 0%, rgba(241, 245, 249, 0.9) 100%); border-bottom: 1px solid rgba(226, 232, 240, 0.5); backdrop-filter: blur(10px);">
-              <th style="padding: 12px 14px; text-align: left; border: 1px solid rgba(226, 232, 240, 0.5); font-weight: 700; font-size: 9px; color: #1e293b; letter-spacing: -0.2px; text-transform: uppercase; width: 40px;">序号</th>
-              <th style="padding: 12px 14px; text-align: left; border: 1px solid rgba(226, 232, 240, 0.5); font-weight: 700; font-size: 9px; color: #1e293b; letter-spacing: -0.2px; text-transform: uppercase;">设备UID</th>
-              <th style="padding: 12px 14px; text-align: left; border: 1px solid rgba(226, 232, 240, 0.5); font-weight: 700; font-size: 9px; color: #1e293b; letter-spacing: -0.2px; text-transform: uppercase; max-width: 120px;">设备名字</th>
-              <th style="padding: 12px 14px; text-align: left; border: 1px solid rgba(226, 232, 240, 0.5); font-weight: 700; font-size: 9px; color: #1e293b; letter-spacing: -0.2px; text-transform: uppercase;">级联状态</th>
-              <th style="padding: 12px 14px; text-align: left; border: 1px solid rgba(226, 232, 240, 0.5); font-weight: 700; font-size: 9px; color: #1e293b; letter-spacing: -0.2px; text-transform: uppercase;">状态信息</th>
+        <button id="exportCascadeBtn" style="background: linear-gradient(135deg, #3b82f6 0%, #60a5fa 100%); color: white; border: none; padding: 8px 14px; border-radius: 10px; cursor: pointer; font-size: 10px; font-weight: 700; box-shadow: 0 4px 12px rgba(59, 130, 246, 0.25); letter-spacing: -0.2px; backdrop-filter: blur(10px); border: 1px solid rgba(255, 255, 255, 0.3); transition: all 0.25s ease;">📥 导出清单</button>
+      </div>
+      <div style="overflow-x: auto;">
+        <table class="data-table" style="margin-top: 8px; width: 100%; border-collapse: collapse; border-radius: 12px; overflow: hidden; box-shadow: 0 4px 16px rgba(0, 0, 0, 0.08); background: rgba(255, 255, 255, 0.8); backdrop-filter: blur(10px); border: 1px solid rgba(226, 232, 240, 0.5);">
+          <tr style="background: linear-gradient(135deg, rgba(248, 250, 252, 0.9) 0%, rgba(241, 245, 249, 0.9) 100%); border-bottom: 1px solid rgba(226, 232, 240, 0.5); backdrop-filter: blur(10px);">
+            <th style="padding: 12px 14px; text-align: left; border: 1px solid rgba(226, 232, 240, 0.5); font-weight: 700; font-size: 9px; color: #1e293b; letter-spacing: -0.2px; text-transform: uppercase; width: 40px;">序号</th>
+            <th style="padding: 12px 14px; text-align: left; border: 1px solid rgba(226, 232, 240, 0.5); font-weight: 700; font-size: 9px; color: #1e293b; letter-spacing: -0.2px; text-transform: uppercase;">设备UID</th>
+            <th style="padding: 12px 14px; text-align: left; border: 1px solid rgba(226, 232, 240, 0.5); font-weight: 700; font-size: 9px; color: #1e293b; letter-spacing: -0.2px; text-transform: uppercase; max-width: 120px;">设备名字</th>
+            <th style="padding: 12px 14px; text-align: left; border: 1px solid rgba(226, 232, 240, 0.5); font-weight: 700; font-size: 9px; color: #1e293b; letter-spacing: -0.2px; text-transform: uppercase;">级联状态</th>
+            <th style="padding: 12px 14px; text-align: left; border: 1px solid rgba(226, 232, 240, 0.5); font-weight: 700; font-size: 9px; color: #1e293b; letter-spacing: -0.2px; text-transform: uppercase;">状态信息</th>
+          </tr>
+          ${allDevices.map((item, index) => `
+            <tr style="border-bottom: 1px solid rgba(226, 232, 240, 0.5); transition: all 0.2s ease; font-size: 10px; background: ${item.success ? 'rgba(16, 185, 129, 0.05)' : 'rgba(239, 68, 68, 0.05)'}" onmouseover="this.style.background='rgba(99, 102, 241, 0.05)'" onmouseout="this.style.background='${item.success ? 'rgba(16, 185, 129, 0.05)' : 'rgba(239, 68, 68, 0.05)'}">
+              <td style="padding: 12px 14px; border: 1px solid rgba(226, 232, 240, 0.5); color: #475569; font-weight: 500; text-align: center; width: 40px;">${index + 1}</td>
+              <td style="padding: 12px 14px; border: 1px solid rgba(226, 232, 240, 0.5); color: #475569; font-family: 'SF Mono', monospace; font-size: 9px;">${item.deviceCode || '-'}</td>
+              <td style="padding: 12px 14px; border: 1px solid rgba(226, 232, 240, 0.5); color: #1e293b; font-weight: 600; font-size: 10px; max-width: 120px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">${item.deviceName || '-'}</td>
+              <td style="padding: 12px 14px; border: 1px solid rgba(226, 232, 240, 0.5); color: ${item.success ? '#137333' : '#c5221f'}; font-weight: 600;">
+                ${item.success ? '成功' : '失败'}
+              </td>
+              <td style="padding: 12px 14px; border: 1px solid rgba(226, 232, 240, 0.5); color: #475569; font-size: 10px;">${item.message || (item.success ? '级联成功' : '级联失败')}</td>
             </tr>
-            ${allDevices.map((item, index) => `
-              <tr style="border-bottom: 1px solid rgba(226, 232, 240, 0.5); transition: all 0.2s ease; font-size: 10px; background: ${item.success ? 'rgba(16, 185, 129, 0.05)' : 'rgba(239, 68, 68, 0.05)'}" onmouseover="this.style.background='rgba(99, 102, 241, 0.05)'" onmouseout="this.style.background='${item.success ? 'rgba(16, 185, 129, 0.05)' : 'rgba(239, 68, 68, 0.05)'}">
-                <td style="padding: 12px 14px; border: 1px solid rgba(226, 232, 240, 0.5); color: #475569; font-weight: 500; text-align: center; width: 40px;">${index + 1}</td>
-                <td style="padding: 12px 14px; border: 1px solid rgba(226, 232, 240, 0.5); color: #475569; font-family: 'SF Mono', monospace; font-size: 9px;">${item.deviceCode || '-'}</td>
-                <td style="padding: 12px 14px; border: 1px solid rgba(226, 232, 240, 0.5); color: #1e293b; font-weight: 600; font-size: 10px; max-width: 120px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">${item.deviceName || '-'}</td>
-                <td style="padding: 12px 14px; border: 1px solid rgba(226, 232, 240, 0.5); color: ${item.success ? '#137333' : '#c5221f'}; font-weight: 600;">
-                  ${item.success ? '成功' : '失败'}
-                </td>
-                <td style="padding: 12px 14px; border: 1px solid rgba(226, 232, 240, 0.5); color: #475569; font-size: 10px;">${item.message || (item.success ? '级联成功' : '级联失败')}</td>
-              </tr>
-            `).join('')}
-          </table>
-        </div>
-        <div style="margin-top: 12px; display: flex; justify-content: space-between; font-size: 11px; font-weight: 600;">
-          <div style="color: #137333;">成功: ${successDevices.length}台</div>
-          <div style="color: #c5221f;">失败: ${failedDevices.length}台</div>
-        </div>
+          `).join('')}
+        </table>
       </div>
     ` : '<div class="no-data">没有设备信息</div>';
+
     
     
     document.getElementById('cascadeTaskResult').style.display = 'block';
@@ -962,23 +961,21 @@ async function processCSVFileQuery(file) {
     
     // 显示上传统计信息
     const uploadStatsHtml = `
-      <div style="margin-bottom: 14px; padding: 16px; background: rgba(255, 255, 255, 0.7); border-radius: 16px; box-shadow: 0 4px 16px rgba(0, 0, 0, 0.08); backdrop-filter: blur(20px); border: 1px solid rgba(255, 255, 255, 0.5); transition: all 0.3s ease;">
-        <div style="overflow-x: auto;">
-          <table class="data-table" style="margin-top: 8px; width: 100%; border-collapse: collapse; border-radius: 12px; overflow: hidden; box-shadow: 0 4px 16px rgba(0, 0, 0, 0.08); background: rgba(255, 255, 255, 0.8); backdrop-filter: blur(10px); border: 1px solid rgba(226, 232, 240, 0.5);">
-            <tr style="background: linear-gradient(135deg, rgba(248, 250, 252, 0.9) 0%, rgba(241, 245, 249, 0.9) 100%); border-bottom: 1px solid rgba(226, 232, 240, 0.5); backdrop-filter: blur(10px);">
-              <th style="padding: 12px 14px; text-align: left; border: 1px solid rgba(226, 232, 240, 0.5); font-weight: 700; font-size: 9px; color: #1e293b; letter-spacing: -0.2px; text-transform: uppercase;">总上传条数</th>
-              <th style="padding: 12px 14px; text-align: left; border: 1px solid rgba(226, 232, 240, 0.5); font-weight: 700; font-size: 9px; color: #1e293b; letter-spacing: -0.2px; text-transform: uppercase;">重复条数</th>
-              <th style="padding: 12px 14px; text-align: left; border: 1px solid rgba(226, 232, 240, 0.5); font-weight: 700; font-size: 9px; color: #1e293b; letter-spacing: -0.2px; text-transform: uppercase;">有效条数</th>
-            </tr>
-            <tr style="border-bottom: 1px solid rgba(226, 232, 240, 0.5); transition: all 0.2s ease; font-size: 10px;">
-              <td style="padding: 12px 14px; border: 1px solid rgba(226, 232, 240, 0.5); color: #475569; font-weight: 500;">${result.totalUpload}</td>
-              <td style="padding: 12px 14px; border: 1px solid rgba(226, 232, 240, 0.5); color: #c5221f; font-weight: 600;">${result.duplicateCount}</td>
-              <td style="padding: 12px 14px; border: 1px solid rgba(226, 232, 240, 0.5); color: #137333; font-weight: 600;">${result.validCount}</td>
-            </tr>
-          </table>
-        </div>
-        <button id="reuploadBtnQuery" style="margin-top: 12px; width: 100%; background: linear-gradient(135deg, #3b82f6 0%, #60a5fa 100%); color: white; border: none; padding: 10px; border-radius: 10px; cursor: pointer; font-size: 11px; font-weight: 700; box-shadow: 0 4px 12px rgba(59, 130, 246, 0.25); letter-spacing: -0.2px; backdrop-filter: blur(10px); border: 1px solid rgba(255, 255, 255, 0.3); transition: all 0.25s ease;">🔄 重新上传</button>
+      <div style="overflow-x: auto;">
+        <table class="data-table" style="margin-top: 8px; width: 100%; border-collapse: collapse; border-radius: 12px; overflow: hidden; box-shadow: 0 4px 16px rgba(0, 0, 0, 0.08); background: rgba(255, 255, 255, 0.8); backdrop-filter: blur(10px); border: 1px solid rgba(226, 232, 240, 0.5);">
+          <tr style="background: linear-gradient(135deg, rgba(248, 250, 252, 0.9) 0%, rgba(241, 245, 249, 0.9) 100%); border-bottom: 1px solid rgba(226, 232, 240, 0.5); backdrop-filter: blur(10px);">
+            <th style="padding: 12px 14px; text-align: left; border: 1px solid rgba(226, 232, 240, 0.5); font-weight: 700; font-size: 9px; color: #1e293b; letter-spacing: -0.2px; text-transform: uppercase;">总上传条数</th>
+            <th style="padding: 12px 14px; text-align: left; border: 1px solid rgba(226, 232, 240, 0.5); font-weight: 700; font-size: 9px; color: #1e293b; letter-spacing: -0.2px; text-transform: uppercase;">重复条数</th>
+            <th style="padding: 12px 14px; text-align: left; border: 1px solid rgba(226, 232, 240, 0.5); font-weight: 700; font-size: 9px; color: #1e293b; letter-spacing: -0.2px; text-transform: uppercase;">有效条数</th>
+          </tr>
+          <tr style="border-bottom: 1px solid rgba(226, 232, 240, 0.5); transition: all 0.2s ease; font-size: 10px;">
+            <td style="padding: 12px 14px; border: 1px solid rgba(226, 232, 240, 0.5); color: #475569; font-weight: 500;">${result.totalUpload}</td>
+            <td style="padding: 12px 14px; border: 1px solid rgba(226, 232, 240, 0.5); color: #c5221f; font-weight: 600;">${result.duplicateCount}</td>
+            <td style="padding: 12px 14px; border: 1px solid rgba(226, 232, 240, 0.5); color: #137333; font-weight: 600;">${result.validCount}</td>
+          </tr>
+        </table>
       </div>
+      <button id="reuploadBtnQuery" style="margin-top: 12px; width: 100%; background: linear-gradient(135deg, #3b82f6 0%, #60a5fa 100%); color: white; border: none; padding: 10px; border-radius: 10px; cursor: pointer; font-size: 11px; font-weight: 700; box-shadow: 0 4px 12px rgba(59, 130, 246, 0.25); letter-spacing: -0.2px; backdrop-filter: blur(10px); border: 1px solid rgba(255, 255, 255, 0.3); transition: all 0.25s ease;">🔄 重新上传</button>
     `;
     
     document.getElementById('uploadStatsQuery').style.display = 'block';
@@ -1063,7 +1060,7 @@ async function queryDeviceStatus() {
         return;
       }
     } else if (deviceCodesInput) {
-      deviceCodeArray = deviceCodesInput.split(',').map(code => code.trim()).filter(code => code);
+      deviceCodeArray = deviceCodesInput.split(/\n|\r\n/).map(code => code.trim()).filter(code => code);
       console.log('手动输入的设备编码:', deviceCodeArray);
       
       // 隐藏上传文件的控件及其标签
@@ -1137,11 +1134,21 @@ async function queryDeviceStatus() {
       const deviceStatusList = response.deviceStatusList || [];
       console.log('设备在线状态列表:', deviceStatusList);
       
+      // 计算在线和离线设备数量
+      const onlineCount = deviceStatusList.filter(item => item.online).length;
+      const offlineCount = deviceStatusList.filter(item => !item.online).length;
+      
       // 显示查询结果
       const resultHtml = deviceStatusList.length > 0 ? `
         <div style="margin-bottom: 14px; padding: 16px; background: rgba(255, 255, 255, 0.7); border-radius: 16px; box-shadow: 0 4px 16px rgba(0, 0, 0, 0.08); backdrop-filter: blur(20px); border: 1px solid rgba(255, 255, 255, 0.5); transition: all 0.3s ease;">
           <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px;">
-            <strong style="font-size: 11px; color: #1e293b; font-weight: 700; letter-spacing: -0.3px;">设备在线状态查询结果 (共${deviceStatusList.length}台):</strong>
+            <div style="display: flex; align-items: center; gap: 12px;">
+              <strong style="font-size: 11px; color: #1e293b; font-weight: 700; letter-spacing: -0.3px;">设备在线状态查询结果 (共${deviceStatusList.length}台):</strong>
+              <div style="display: flex; gap: 16px; font-size: 11px; font-weight: 600;">
+                <div style="color: #137333;">在线: ${onlineCount}台</div>
+                <div style="color: #c5221f;">离线: ${offlineCount}台</div>
+              </div>
+            </div>
             <button id="exportDeviceStatusBtn" style="background: linear-gradient(135deg, #3b82f6 0%, #60a5fa 100%); color: white; border: none; padding: 8px 14px; border-radius: 10px; cursor: pointer; font-size: 10px; font-weight: 700; box-shadow: 0 4px 12px rgba(59, 130, 246, 0.25); letter-spacing: -0.2px; backdrop-filter: blur(10px); border: 1px solid rgba(255, 255, 255, 0.3); transition: all 0.25s ease;">📥 导出清单</button>
           </div>
           <div style="overflow-x: auto;">
@@ -1166,12 +1173,9 @@ async function queryDeviceStatus() {
               `).join('')}
             </table>
           </div>
-          <div style="margin-top: 12px; display: flex; justify-content: space-between; font-size: 11px; font-weight: 600;">
-            <div style="color: #137333;">在线: ${deviceStatusList.filter(item => item.online).length}台</div>
-            <div style="color: #c5221f;">离线: ${deviceStatusList.filter(item => !item.online).length}台</div>
-          </div>
         </div>
       ` : '<div class="no-data">没有设备信息</div>';
+
       
       document.getElementById('deviceStatusResult').style.display = 'block';
       document.getElementById('deviceStatus').innerHTML = resultHtml;
