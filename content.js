@@ -306,8 +306,37 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
   }
   
   if (request.action === 'createCascadeTask') {
+    console.log('收到 createCascadeTask 请求:', request);
     const { userId, account, deviceList } = request;
     const url = 'https://vcp.21cn.com/vcpCamera/cascade/addCascadeTaskOperator';
+    
+    // 检查 cascadeCode 是否存在
+    if (!cascadeCode) {
+      console.error('cascadeCode 为空，无法执行级联操作');
+      
+      // 生成失败的级联结果
+      const cascadeResults = deviceList.map(device => {
+        return {
+          deviceCode: device.deviceCode,
+          regionId: device.regionId,
+          regionName: device.regionName,
+          deviceName: device.deviceName,
+          success: false,
+          message: 'cascadeCode 为空，无法执行级联操作'
+        };
+      });
+      
+      sendResponse({ 
+        success: false, 
+        error: 'cascadeCode 为空，无法执行级联操作',
+        cascadeResults: cascadeResults 
+      });
+      
+      return true;
+    }
+    
+    console.log('cascadeCode 存在:', cascadeCode);
+    console.log('准备发送级联请求，设备数量:', deviceList.length);
     
     const taskData = {
       livePer: '1',
@@ -317,7 +346,7 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
       aiServicePer: '1',
       faceRecognitionPer: '0',
       vehicleRecognitionPer: '0',
-      cascadeCode: cascadeCode || '',
+      cascadeCode: cascadeCode,
       deviceList: deviceList,
       taskType: 1,
       source: 1,
@@ -339,6 +368,9 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
     console.log('请求地址:', url);
     console.log('请求头:', JSON.stringify(headers, null, 2));
     console.log('任务数据:', JSON.stringify(taskData, null, 2));
+    
+    // 发送实际请求
+    console.log('发送级联请求...');
     
     fetch(url, {
       method: 'POST',
@@ -682,6 +714,114 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
         sendResponse({ success: true, imageUrl: imageUrl });
       } else {
         throw new Error(data.msg || '查询失败，未获取到图片地址');
+      }
+    })
+    .catch(err => {
+      console.error('Content Script请求失败:', err);
+      sendResponse({ success: false, error: err.message });
+    });
+    
+    return true;
+  }
+  
+  if (request.action === 'saveRegion') {
+    const { cusRegionNames, cusRegionId, entUserId: requestEntUserId, isEdit } = request;
+    const url = isEdit ? 'https://vcp.21cn.com/vcpCamera/cusRegion/editCusRegion' : 'https://vcp.21cn.com/vcpCamera/cusRegion/addCusRegion';
+    
+    const params = new URLSearchParams();
+    if (isEdit) {
+      params.append('cusRegionId', cusRegionId);
+      params.append('cusRegionName', cusRegionNames);
+      params.append('entUserId', requestEntUserId || entUserId || '');
+    } else {
+      params.append('cusRegionNames', cusRegionNames);
+      params.append('cusRegionId', cusRegionId);
+      params.append('entUserId', requestEntUserId || entUserId || '');
+    }
+    
+    const headers = {
+      'Accept': 'application/json, text/plain, */*',
+      'Accept-Language': 'zh-CN,zh;q=0.9'
+    };
+    
+    console.log('Content Script发送请求:', url);
+    console.log('请求参数:', params.toString());
+    
+    fetch(`${url}?${params.toString()}`, {
+      method: 'GET',
+      headers: headers,
+      credentials: 'same-origin'
+    })
+    .then(response => {
+      console.log('Content Script响应状态:', response.status);
+      console.log('Content Script响应URL:', response.url);
+      
+      // 检查响应是否是重定向到登录页面
+      if (response.url.includes('unifyAccountLogout.do')) {
+        return Promise.reject(new Error('需要登录'));
+      }
+      
+      // 尝试解析为JSON
+      return response.json();
+    })
+    .then(result => {
+      console.log('Content Script响应:', result);
+      
+      if (result.code === 0 || result.code === 20000) {
+        sendResponse({ success: true, data: result });
+      } else {
+        sendResponse({ success: false, error: result.msg || '操作失败' });
+      }
+    })
+    .catch(err => {
+      console.error('Content Script请求失败:', err);
+      sendResponse({ success: false, error: err.message });
+    });
+    
+    return true;
+  }
+  
+  if (request.action === 'deleteRegion') {
+    const { cusRegionIds } = request;
+    const url = 'https://vcp.21cn.com/vcpCamera/cusRegion/delCusRegion';
+    
+    const params = new URLSearchParams({
+      cusRegionIds: cusRegionIds,
+      entUserId: entUserId || ''
+    });
+    
+    const headers = {
+      'Accept': 'application/json, text/plain, */*',
+      'Accept-Language': 'zh-CN,zh;q=0.9'
+    };
+    
+    console.log('Content Script发送请求:', url);
+    console.log('请求参数:', params.toString());
+    
+    fetch(`${url}?${params.toString()}`, {
+      method: 'GET',
+      headers: headers,
+      credentials: 'same-origin'
+    })
+    .then(response => {
+      console.log('Content Script响应状态:', response.status);
+      console.log('Content Script响应URL:', response.url);
+      
+      // 检查响应是否是重定向到登录页面
+      if (response.url.includes('unifyAccountLogout.do')) {
+        return Promise.reject(new Error('需要登录'));
+      }
+      
+      // 尝试解析为JSON
+      return response.json();
+    })
+    .then(result => {
+      console.log('Content Script响应:', result);
+      
+      if (result.code === 0 || result.code === 20000) {
+        sendResponse({ success: true, data: result });
+      } else {
+        sendResponse({ success: false, error: result.msg || '操作失败' });
       }
     })
     .catch(err => {

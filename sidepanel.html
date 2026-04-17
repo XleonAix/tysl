@@ -535,6 +535,7 @@
       <button class="tab-btn" data-tab="batchCascade">批量级联功能</button>
       <button class="tab-btn" data-tab="batchQuery">批量设备查询</button>
       <button class="tab-btn" data-tab="deviceList">设备清单查询</button>
+      <button class="tab-btn" data-tab="regionAdjust">监控目录调整</button>
       <button class="tab-btn" data-tab="qualityMonitor">画质监测</button>
     </div>
   </div>
@@ -571,7 +572,6 @@
   <!-- 批量级联功能页面 -->
   <div id="batchCascade" class="page">
     <div class="input-group">
-      <label for="enteraccount">请输入需要汇聚的手机号:</label>
       <div style="display: flex; gap: 10px;">
         <input type="text" id="enteraccount" placeholder="请输入账号" style="flex: 1;">
         <button id="queryBtn" class="query-btn">查询</button>
@@ -681,7 +681,6 @@
   <!-- 设备清单查询页面 -->
   <div id="deviceList" class="page">
     <div class="input-group">
-      <label for="deviceListAccount">请输入账号:</label>
       <div style="display: flex; gap: 10px;">
         <input type="text" id="deviceListAccount" placeholder="请输入11位手机号" style="flex: 1;">
         <button id="queryCustomListBtn" class="query-btn">查询企业主</button>
@@ -714,6 +713,29 @@
     
     <div id="deviceListResult" style="margin-top: 12px; display: none;">
       <div id="deviceListContent" style="max-height: 150px; overflow-y: auto;">-</div>
+    </div>
+  </div>
+  
+  <!-- 监控目录调整页面 -->
+  <div id="regionAdjust" class="page">
+    <div class="input-group" style="display: flex; align-items: center; gap: 10px;">
+      <input type="text" id="regionAdjustAccount" placeholder="请输入11位手机号" style="flex: 1;">
+      <button id="queryRegionAdjustBtn" class="query-btn">查询企业主</button>
+      <button id="clearRegionAdjustDataBtn" class="query-btn" style="background: linear-gradient(135deg, #ef4444 0%, #dc2626 100%);">🗑️ 清除数据</button>
+    </div>
+    
+
+    
+    <div id="regionAdjustListResult" class="result-box hidden">
+      <div class="result-label">监控目录列表:</div>
+      <div id="regionAdjustList" class="content-box" style="max-height: 200px; overflow-y: auto;">-</div>
+    </div>
+    
+
+    
+    <div id="regionAdjustResult" class="result-box hidden">
+      <div class="result-label">操作结果:</div>
+      <div id="regionAdjustContent" class="content-box">-</div>
     </div>
   </div>
   

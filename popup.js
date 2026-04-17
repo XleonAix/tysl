@@ -286,11 +286,18 @@ function renderRegionTree(regionList, level = 0) {
     const toggleIcon = hasChild ? '▶' : '•';
     
     html += `
-      <li class="region-item" style="padding-left: ${indent}px" data-id="${item.id}" data-name="${item.name || ''}" data-has-child="${hasChild}">
-        <span class="region-toggle">${toggleIcon}</span>
-        <input type="radio" name="region-radio" class="region-radio" data-id="${item.id}" data-name="${item.name || ''}">
-        <span class="region-name">${item.name || '未命名'}</span>
-        <span class="region-id">(ID: ${item.id})</span>
+      <li class="region-item" style="padding-left: ${indent}px; display: flex; align-items: center; justify-content: space-between;" data-id="${item.id}" data-name="${item.name || ''}" data-has-child="${hasChild}">
+        <div style="display: flex; align-items: center; gap: 8px;">
+          <span class="region-toggle">${toggleIcon}</span>
+          <input type="radio" name="region-radio" class="region-radio" data-id="${item.id}" data-name="${item.name || ''}">
+          <span class="region-name">${item.name || '未命名'}</span>
+          <span class="region-id">(ID: ${item.id})</span>
+        </div>
+        <div style="display: flex; gap: 4px;">
+          <button class="add-subregion-btn" data-id="${item.id}" style="background: green; color: white; border: none; padding: 4px 8px; border-radius: 4px; cursor: pointer; font-size: 12px; font-weight: bold;">+</button>
+          <button class="edit-region-btn" data-id="${item.id}" data-name="${item.name || ''}" style="background: blue; color: white; border: none; padding: 4px 8px; border-radius: 4px; cursor: pointer; font-size: 12px; font-weight: bold;">✏️</button>
+          <button class="delete-region-btn" data-id="${item.id}" style="background: red; color: white; border: none; padding: 4px 8px; border-radius: 4px; cursor: pointer; font-size: 12px; font-weight: bold;">✕</button>
+        </div>
       </li>
     `;
     
@@ -307,6 +314,8 @@ function addRegionClickHandlers() {
   document.querySelectorAll('.region-item').forEach(item => {
     const toggle = item.querySelector('.region-toggle');
     const radio = item.querySelector('.region-radio');
+    const editBtn = item.querySelector('.edit-region-btn');
+    const deleteBtn = item.querySelector('.delete-region-btn');
     const hasChild = item.getAttribute('data-has-child') === 'true';
     
     toggle.addEventListener('click', async (e) => {
@@ -383,6 +392,131 @@ function addRegionClickHandlers() {
       
       // 不显示选中的目录信息
     });
+    
+    const addSubregionBtn = item.querySelector('.add-subregion-btn');
+    
+    if (addSubregionBtn) {
+      addSubregionBtn.addEventListener('click', async (e) => {
+        e.stopPropagation();
+        const parentId = addSubregionBtn.getAttribute('data-id');
+        
+        console.log('点击添加子目录:', { parentId });
+        
+        const subregionName = prompt('请输入子目录名称:');
+        if (subregionName && subregionName.trim()) {
+          try {
+            const tab = await getVcpTab();
+            if (!tab) {
+              showStatus('请先登录 <a href="https://vcp.21cn.com/vcpCamera/web/index.html#/nopasslogin" target="_blank">天翼云眼视频监控平台</a>', true);
+              return;
+            }
+            
+            console.log('发送saveRegion消息...');
+            const response = await chrome.tabs.sendMessage(tab.id, { 
+              action: 'saveRegion',
+              cusRegionNames: subregionName.trim(),
+              cusRegionId: parentId,
+              entUserId: '75509572', // 默认值，实际应该从企业主信息获取
+              isEdit: false
+            });
+            
+            console.log('收到saveRegion响应:', response);
+            
+            if (response.success) {
+              showStatus('子目录添加成功');
+              // 重新获取监控目录
+              await getLevelCusRegionForRegionAdjust();
+            } else {
+              showStatus('子目录添加失败: ' + response.error, true);
+            }
+          } catch (err) {
+            console.error('添加子目录失败:', err);
+            showStatus('添加子目录失败: ' + err.message, true);
+          }
+        }
+      });
+    }
+    
+    if (editBtn) {
+      editBtn.addEventListener('click', async (e) => {
+        e.stopPropagation();
+        const regionId = editBtn.getAttribute('data-id');
+        const regionName = editBtn.getAttribute('data-name');
+        
+        console.log('点击编辑目录:', { regionId, regionName });
+        
+        const newName = prompt('请输入新的目录名称:', regionName);
+        if (newName && newName.trim() && newName !== regionName) {
+          try {
+            const tab = await getVcpTab();
+            if (!tab) {
+              showStatus('请先登录 <a href="https://vcp.21cn.com/vcpCamera/web/index.html#/nopasslogin" target="_blank">天翼云眼视频监控平台</a>', true);
+              return;
+            }
+            
+            console.log('发送saveRegion消息...');
+            const response = await chrome.tabs.sendMessage(tab.id, { 
+              action: 'saveRegion',
+              cusRegionNames: newName.trim(),
+              cusRegionId: regionId,
+              entUserId: '75509572', // 默认值，实际应该从企业主信息获取
+              isEdit: true
+            });
+            
+            console.log('收到saveRegion响应:', response);
+            
+            if (response.success) {
+              showStatus('目录编辑成功');
+              // 重新获取监控目录
+              await getLevelCusRegionForRegionAdjust();
+            } else {
+              showStatus('目录编辑失败: ' + response.error, true);
+            }
+          } catch (err) {
+            console.error('编辑目录失败:', err);
+            showStatus('编辑目录失败: ' + err.message, true);
+          }
+        }
+      });
+    }
+    
+    if (deleteBtn) {
+      deleteBtn.addEventListener('click', async (e) => {
+        e.stopPropagation();
+        const regionId = deleteBtn.getAttribute('data-id');
+        
+        console.log('点击删除目录:', { regionId });
+        
+        if (confirm('确定要删除该目录吗？')) {
+          try {
+            const tab = await getVcpTab();
+            if (!tab) {
+              showStatus('请先登录 <a href="https://vcp.21cn.com/vcpCamera/web/index.html#/nopasslogin" target="_blank">天翼云眼视频监控平台</a>', true);
+              return;
+            }
+            
+            console.log('发送deleteRegion消息...');
+            const response = await chrome.tabs.sendMessage(tab.id, { 
+              action: 'deleteRegion',
+              cusRegionIds: regionId
+            });
+            
+            console.log('收到deleteRegion响应:', response);
+            
+            if (response.success) {
+              showStatus('目录删除成功');
+              // 重新获取监控目录
+              await getLevelCusRegionForRegionAdjust();
+            } else {
+              showStatus('目录删除失败: ' + response.error, true);
+            }
+          } catch (err) {
+            console.error('删除目录失败:', err);
+            showStatus('删除目录失败: ' + err.message, true);
+          }
+        }
+      });
+    }
   });
 }
 
@@ -617,128 +751,47 @@ async function createCascadeTask() {
       return;
     }
     
-    // 显示级联进度
-    const progressContainer = document.createElement('div');
-    progressContainer.id = 'cascadeProgress';
-    progressContainer.style.cssText = `
-      margin: 16px 0;
-      padding: 16px;
-      background: rgba(255, 255, 255, 0.8);
-      border-radius: 12px;
-      box-shadow: 0 4px 16px rgba(0, 0, 0, 0.08);
-      backdrop-filter: blur(10px);
-      border: 1px solid rgba(226, 232, 240, 0.5);
-    `;
+    console.log('发送createCascadeTask消息...');
+    const response = await chrome.tabs.sendMessage(tab.id, {
+      action: 'createCascadeTask',
+      userId: userId,
+      account: account,
+      deviceList: deviceList
+    });
     
-    const progressBar = document.createElement('div');
-    progressBar.style.cssText = `
-      width: 100%;
-      height: 8px;
-      background: rgba(226, 232, 240, 0.5);
-      border-radius: 4px;
-      overflow: hidden;
-      margin-bottom: 8px;
-    `;
+    console.log('收到createCascadeTask响应:', response);
     
-    const progressFill = document.createElement('div');
-    progressFill.style.cssText = `
-      width: 0%;
-      height: 100%;
-      background: linear-gradient(90deg, #3b82f6 0%, #60a5fa 100%);
-      border-radius: 4px;
-      transition: width 0.3s ease;
-    `;
+    // 无论成功失败，都处理级联结果
+    const resultData = response.data;
+    const cascadeResults = response.cascadeResults || [];
     
-    const progressText = document.createElement('div');
-    progressText.style.cssText = `
-      font-size: 10px;
-      color: #475569;
-      text-align: center;
-      font-weight: 600;
-    `;
-    progressText.textContent = '准备级联...';
-    
-    progressBar.appendChild(progressFill);
-    progressContainer.appendChild(progressBar);
-    progressContainer.appendChild(progressText);
-    
-    document.getElementById('cascadeTaskResult').style.display = 'block';
-    document.getElementById('cascadeTask').innerHTML = '';
-    document.getElementById('cascadeTask').appendChild(progressContainer);
-    
-    // 每5个设备一批级联
-    const batchSize = 5;
-    const allCascadeResults = [];
-    const totalBatches = Math.ceil(deviceList.length / batchSize);
-    
-    console.log('开始分批级联...');
-    console.log(`总设备数: ${deviceList.length}, 每批${batchSize}个, 共${totalBatches}批`);
-    
-    for (let i = 0; i < deviceList.length; i += batchSize) {
-      const batchDevices = deviceList.slice(i, i + batchSize);
-      const batchNumber = Math.floor(i / batchSize) + 1;
-      
-      console.log(`处理第${batchNumber}批，设备数量: ${batchDevices.length}`);
-      
-      // 更新进度
-      const progress = Math.round((i / deviceList.length) * 100);
-      progressFill.style.width = `${progress}%`;
-      progressText.textContent = `级联中... (${i}/${deviceList.length})`;
-      
-      try {
-        console.log(`发送第${batchNumber}批createCascadeTask消息...`);
-        const response = await chrome.tabs.sendMessage(tab.id, { 
-          action: 'createCascadeTask',
-          userId: userId,
-          account: account,
-          deviceList: batchDevices
-        });
-        
-        console.log(`收到第${batchNumber}批createCascadeTask响应:`, response);
-        
-        // 收集级联结果
-        if (response.cascadeResults && response.cascadeResults.length > 0) {
-          allCascadeResults.push(...response.cascadeResults);
-        } else {
-          // 如果没有cascadeResults，根据响应状态生成默认结果
-          const isApiSuccess = response.success && (response.data?.code === 20000 || response.data?.code === 0 || response.data?.code === 200);
-          const defaultResults = batchDevices.map(device => ({
-            deviceCode: device.deviceCode,
-            regionId: device.regionId,
-            regionName: device.regionName,
-            deviceName: device.deviceName,
-            success: isApiSuccess,
-            message: isApiSuccess ? '级联成功' : (response.error || response.data?.msg || '级联失败')
-          }));
-          allCascadeResults.push(...defaultResults);
-        }
-      } catch (error) {
-        console.error(`第${batchNumber}批级联失败:`, error);
-        // 为这批设备生成失败结果
-        const errorResults = batchDevices.map(device => ({
-          deviceCode: device.deviceCode,
-          regionId: device.regionId,
-          regionName: device.regionName,
-          deviceName: device.deviceName,
-          success: false,
-          message: '级联请求失败: ' + error.message
-        }));
-        allCascadeResults.push(...errorResults);
-      }
-    }
-    
-    // 更新进度为100%
-    progressFill.style.width = '100%';
-    progressText.textContent = `级联完成! (${deviceList.length}/${deviceList.length})`;
-    
-    console.log('所有批次级联完成');
-    console.log('总级联结果数量:', allCascadeResults.length);
+    console.log('级联任务结果:', resultData);
+    console.log('级联详细结果:', cascadeResults);
     
     // 分类成功和失败的设备
-    let successDevices = allCascadeResults.filter(item => item.success);
-    let failedDevices = allCascadeResults.filter(item => !item.success);
+    let successDevices = cascadeResults.filter(item => item.success);
+    let failedDevices = cascadeResults.filter(item => !item.success);
     
-    // 添加获取设备信息失败的设备到失败列表
+    // 如果没有cascadeResults，根据响应状态生成默认结果
+    if (cascadeResults.length === 0) {
+      const isApiSuccess = response.success && (resultData?.code === 20000 || resultData?.code === 0 || resultData?.code === 200);
+      const defaultResults = deviceList.map(device => ({
+        deviceCode: device.deviceCode,
+        regionId: device.regionId,
+        regionName: device.regionName,
+        deviceName: device.deviceName,
+        success: isApiSuccess,
+        message: isApiSuccess ? '级联成功' : (response.error || resultData?.msg || '级联失败')
+      }));
+      
+      successDevices = defaultResults.filter(item => item.success);
+      failedDevices = defaultResults.filter(item => !item.success);
+      
+      console.log('生成默认结果 - 成功设备:', successDevices.length);
+      console.log('生成默认结果 - 失败设备:', failedDevices.length);
+    }
+    
+    // 添加获取设备信息失败的设备到结果中
     const deviceInfoFailedDevices = failedDeviceCodes.map(code => ({
       deviceCode: code,
       regionId: '',
@@ -748,24 +801,41 @@ async function createCascadeTask() {
       message: '设备码错误'
     }));
     
-    failedDevices = [...failedDevices, ...deviceInfoFailedDevices];
+    // 将获取设备信息失败的设备添加到级联结果中
+    cascadeResults.push(...deviceInfoFailedDevices);
     
-    // 合并成功和失败的设备到一个数组
-    const allDevices = [...successDevices, ...failedDevices];
+    // 重新分类成功和失败的设备
+    successDevices = cascadeResults.filter(item => item.success);
+    failedDevices = cascadeResults.filter(item => !item.success);
     
-    // 确保失败设备信息能够显示
-    console.log('最终成功设备数:', successDevices.length);
-    console.log('最终失败设备数:', failedDevices.length);
+    // 计算统计信息
+    const totalCount = cascadeResults.length;
+    const successCount = successDevices.length;
+    const failedCount = failedDevices.length;
+    
+    console.log('显示级联结果...');
+    console.log('总数:', totalCount);
+    console.log('成功数:', successCount);
+    console.log('失败数:', failedCount);
     console.log('获取设备信息失败的设备数:', deviceInfoFailedDevices.length);
-    console.log('总设备数:', allDevices.length);
     
-    const resultHtml = allDevices.length > 0 ? `
+    // 显示状态信息
+    if (successCount === totalCount) {
+      showStatus(`级联完成，全部${successCount}台设备级联成功！`, false);
+    } else if (successCount > 0) {
+      showStatus(`级联完成，${successCount}台成功，${failedCount}台失败`, true);
+    } else {
+      showStatus(`级联失败，全部${totalCount}台设备级联失败`, true);
+    }
+    
+    // 生成表格形式的报告内容
+    let reportContent = `
       <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px;">
         <div style="display: flex; align-items: center; gap: 12px;">
-          <strong style="font-size: 11px; color: #1e293b; font-weight: 700; letter-spacing: -0.3px;">级联任务结果 (共${allDevices.length}台):</strong>
+          <strong style="font-size: 11px; color: #1e293b; font-weight: 700; letter-spacing: -0.3px;">级联任务结果 (共${totalCount}台):</strong>
           <div style="display: flex; gap: 16px; font-size: 11px; font-weight: 600;">
-            <div style="color: #137333;">成功: ${successDevices.length}台</div>
-            <div style="color: #c5221f;">失败: ${failedDevices.length}台</div>
+            <div style="color: #137333;">成功: ${successCount}台</div>
+            <div style="color: #c5221f;">失败: ${failedCount}台</div>
           </div>
         </div>
         <button id="exportCascadeBtn" style="background: linear-gradient(135deg, #3b82f6 0%, #60a5fa 100%); color: white; border: none; padding: 8px 14px; border-radius: 10px; cursor: pointer; font-size: 10px; font-weight: 700; box-shadow: 0 4px 12px rgba(59, 130, 246, 0.25); letter-spacing: -0.2px; backdrop-filter: blur(10px); border: 1px solid rgba(255, 255, 255, 0.3); transition: all 0.25s ease;">📥 导出清单</button>
@@ -779,7 +849,7 @@ async function createCascadeTask() {
             <th style="padding: 12px 14px; text-align: left; border: 1px solid rgba(226, 232, 240, 0.5); font-weight: 700; font-size: 9px; color: #1e293b; letter-spacing: -0.2px; text-transform: uppercase;">级联状态</th>
             <th style="padding: 12px 14px; text-align: left; border: 1px solid rgba(226, 232, 240, 0.5); font-weight: 700; font-size: 9px; color: #1e293b; letter-spacing: -0.2px; text-transform: uppercase;">状态信息</th>
           </tr>
-          ${allDevices.map((item, index) => `
+          ${cascadeResults.map((item, index) => `
             <tr style="border-bottom: 1px solid rgba(226, 232, 240, 0.5); transition: all 0.2s ease; font-size: 10px; background: ${item.success ? 'rgba(16, 185, 129, 0.05)' : 'rgba(239, 68, 68, 0.05)'}" onmouseover="this.style.background='rgba(99, 102, 241, 0.05)'" onmouseout="this.style.background='${item.success ? 'rgba(16, 185, 129, 0.05)' : 'rgba(239, 68, 68, 0.05)'}">
               <td style="padding: 12px 14px; border: 1px solid rgba(226, 232, 240, 0.5); color: #475569; font-weight: 500; text-align: center; width: 40px;">${index + 1}</td>
               <td style="padding: 12px 14px; border: 1px solid rgba(226, 232, 240, 0.5); color: #475569; font-family: 'SF Mono', monospace; font-size: 9px;">${item.deviceCode || '-'}</td>
@@ -792,27 +862,25 @@ async function createCascadeTask() {
           `).join('')}
         </table>
       </div>
-    ` : '<div class="no-data">没有设备信息</div>';
-
+    `;
     
-    
+    // 显示报告
+    document.getElementById('cascadeTask').innerHTML = reportContent;
     document.getElementById('cascadeTaskResult').style.display = 'block';
-    document.getElementById('cascadeTask').innerHTML = resultHtml;
     
     // 添加导出按钮事件监听器
     const exportBtn = document.getElementById('exportCascadeBtn');
     if (exportBtn) {
       exportBtn.addEventListener('click', () => {
-        exportCascadeResult(allDevices);
+        exportCascadeResult(cascadeResults);
       });
     }
-    
-    // 只显示清单，不显示顶部状态提示
-    // 状态信息已经在清单中体现
   } catch (err) {
     console.error('创建级联任务失败:', err);
     console.error('错误堆栈:', err.stack);
     showStatus('创建级联任务失败: ' + err.message, true);
+    // 隐藏进度条
+    document.getElementById('progressContainer').style.display = 'none';
   }
 }
 
@@ -1371,28 +1439,7 @@ function clearCascadeData() {
     uploadFileGroup.style.display = 'block';
   }
   
-  // 确保上传文件标签和控件都显示
-  const uploadFileLabel = document.getElementById('uploadFileLabel');
-  const dropZone = document.getElementById('dropZone');
-  const downloadTemplate = document.getElementById('downloadTemplate');
-  if (uploadFileLabel) {
-    uploadFileLabel.style.display = 'block';
-  }
-  if (dropZone) {
-    dropZone.style.display = 'block';
-  }
-  if (downloadTemplate) {
-    downloadTemplate.style.display = 'block';
-  }
-  
   // 隐藏结果区域
-  document.getElementById('regionResult').classList.add('hidden');
-  document.getElementById('customListResult').classList.add('hidden');
-  document.getElementById('levelCusRegionResult').classList.add('hidden');
-  document.getElementById('uploadStats').classList.add('hidden');
-  document.getElementById('cascadeTaskResult').classList.add('hidden');
-  
-  // 确保结果区域使用display: none隐藏（因为在查询过程中使用了style.display = 'block'）
   document.getElementById('regionResult').style.display = 'none';
   document.getElementById('customListResult').style.display = 'none';
   document.getElementById('levelCusRegionResult').style.display = 'none';
@@ -1404,7 +1451,7 @@ function clearCascadeData() {
   document.getElementById('customList').textContent = '-';
   document.getElementById('levelCusRegion').textContent = '-';
   document.getElementById('uploadStatsContent').textContent = '-';
-  document.getElementById('cascadeTask').innerHTML = '';
+  document.getElementById('cascadeTask').textContent = '-';
   
   // 清除状态信息
   const status = document.getElementById('status');
@@ -1962,17 +2009,213 @@ document.querySelectorAll('.tab-btn').forEach(btn => {
 document.getElementById('queryQualityBtn').addEventListener('click', queryQuality);
 document.getElementById('clearQualityDataBtn').addEventListener('click', clearQualityData);
 
-// 图片放大模态框事件监听器
-document.getElementById('closeModal').addEventListener('click', function() {
-  document.getElementById('imageModal').style.display = 'none';
-});
+// 监控目录调整页面事件监听器
+document.getElementById('queryRegionAdjustBtn').addEventListener('click', queryCustomListForRegionAdjust);
+document.getElementById('clearRegionAdjustDataBtn').addEventListener('click', clearRegionAdjustData);
 
-// 点击模态框背景关闭
-document.getElementById('imageModal').addEventListener('click', function(e) {
-  if (e.target === this) {
-    this.style.display = 'none';
+// 监控目录调整页面相关函数
+async function queryCustomListForRegionAdjust() {
+  console.log('开始查询企业主列表...');
+  const userId = currentUserId;
+  const account = document.getElementById('regionAdjustAccount').value.trim();
+  
+  console.log('userId:', userId);
+  console.log('account:', account);
+  
+  if (!userId || !account) {
+    showStatus('请确保已获取用户ID并输入账号', true);
+    console.log('参数不完整');
+    return;
   }
-});
+  
+  if (!/^1[3-9]\d{9}$/.test(account)) {
+    showStatus('请输入11位手机号', true);
+    console.log('手机号格式不正确');
+    return;
+  }
+  
+  try {
+    const tab = await getVcpTab();
+    
+    console.log('当前标签页:', tab);
+    console.log('当前URL:', tab ? tab.url : '未找到标签页');
+    
+    if (!tab) {
+      showStatus('请先登录 <a href="https://vcp.21cn.com/vcpCamera/web/index.html#/nopasslogin" target="_blank">天翼云眼视频监控平台</a>', true);
+      console.log('页面URL不匹配');
+      return;
+    }
+    
+    console.log('注入content script...');
+    await chrome.scripting.executeScript({
+      target: { tabId: tab.id },
+      files: ['content.js']
+    });
+    
+    console.log('发送getCustomList消息...');
+    const response = await chrome.tabs.sendMessage(tab.id, { 
+      action: 'getCustomList', 
+      userId: userId,
+      account: account
+    });
+    
+    console.log('收到getCustomList响应:', response);
+    
+    if (response.success) {
+      const customData = response.data;
+      
+      console.log('customData:', customData);
+      
+      if (customData && customData.data && customData.data.list) {
+        const list = customData.data.list;
+        const qiyezhuList = list.filter(item => item.roleName === '企业主');
+        
+        console.log('筛选后的企业主列表:', qiyezhuList);
+        
+        if (qiyezhuList.length > 0) {
+          showStatus('该账户是企业主，正在获取监控目录...');
+          
+          await getUserRegionListForRegionAdjust(qiyezhuList[0].id);
+        } else {
+          document.getElementById('regionAdjustListResult').style.display = 'block';
+          document.getElementById('regionAdjustList').textContent = '该账户不是企业主';
+          showStatus('该账户不是企业主', true);
+        }
+      } else {
+        document.getElementById('regionAdjustListResult').style.display = 'block';
+        document.getElementById('regionAdjustList').textContent = '未获取到数据';
+        showStatus('获取客户列表失败', true);
+      }
+    } else {
+      showStatus('获取客户列表失败: ' + response.error, true);
+    }
+  } catch (err) {
+    console.error('获取客户列表失败:', err);
+    console.error('错误堆栈:', err.stack);
+    showStatus('获取客户列表失败: ' + err.message, true);
+  }
+}
+
+async function getUserRegionListForRegionAdjust(userId) {
+  console.log('开始获取用户区域列表...');
+  
+  try {
+    const tab = await getVcpTab();
+    
+    console.log('当前标签页:', tab);
+    console.log('当前URL:', tab ? tab.url : '未找到标签页');
+    
+    if (!tab) {
+      showStatus('请先登录 <a href="https://vcp.21cn.com/vcpCamera/web/index.html#/nopasslogin" target="_blank">天翼云眼视频监控平台</a>', true);
+      console.log('页面URL不匹配');
+      return;
+    }
+    
+    console.log('发送getUserRegionList消息...');
+    const response = await chrome.tabs.sendMessage(tab.id, { 
+      action: 'getUserRegionList',
+      userId: userId
+    });
+    
+    console.log('收到getUserRegionList响应:', response);
+    
+    if (response.success) {
+      console.log('获取regionCode成功:', response.regionCode);
+      await getLevelCusRegionForRegionAdjust();
+    } else {
+      showStatus('获取区域代码失败: ' + response.error, true);
+    }
+  } catch (err) {
+    console.error('获取区域代码失败:', err);
+    console.error('错误堆栈:', err.stack);
+    showStatus('获取区域代码失败: ' + err.message, true);
+  }
+}
+
+async function getLevelCusRegionForRegionAdjust() {
+  console.log('开始获取监控目录...');
+  
+  try {
+    const tab = await getVcpTab();
+    
+    console.log('当前标签页:', tab);
+    console.log('当前URL:', tab ? tab.url : '未找到标签页');
+    
+    if (!tab) {
+      showStatus('请先登录 <a href="https://vcp.21cn.com/vcpCamera/web/index.html#/nopasslogin" target="_blank">天翼云眼视频监控平台</a>', true);
+      console.log('页面URL不匹配');
+      return;
+    }
+    
+    console.log('发送getLevelCusRegion消息...');
+    const response = await chrome.tabs.sendMessage(tab.id, { 
+      action: 'getLevelCusRegion'
+    });
+    
+    console.log('收到getLevelCusRegion响应:', response);
+    
+    if (response.success) {
+      const regionData = response.data;
+      
+      console.log('regionData:', regionData);
+      
+      if (regionData && regionData.data && regionData.data.cusRegionList) {
+        const regionList = regionData.data.cusRegionList;
+        
+        console.log('监控目录列表:', regionList);
+        
+        const regionHtml = renderRegionTree(regionList);
+        
+        document.getElementById('regionAdjustListResult').style.display = 'block';
+        document.getElementById('regionAdjustList').innerHTML = regionHtml;
+        showStatus('获取监控目录成功');
+        
+        addRegionClickHandlers();
+      } else {
+        document.getElementById('regionAdjustListResult').style.display = 'block';
+        document.getElementById('regionAdjustList').textContent = '未获取到监控目录数据';
+        showStatus('获取监控目录失败', true);
+      }
+    } else {
+      showStatus('获取监控目录失败: ' + response.error, true);
+    }
+  } catch (err) {
+    console.error('获取监控目录失败:', err);
+    console.error('错误堆栈:', err.stack);
+    showStatus('获取监控目录失败: ' + err.message, true);
+  }
+}
+
+function clearRegionAdjustData() {
+  console.log('清除监控目录调整页面数据...');
+  
+  // 清除输入框
+  document.getElementById('regionAdjustAccount').value = '';
+  
+  // 隐藏结果区域
+  document.getElementById('regionAdjustListResult').style.display = 'none';
+  document.getElementById('regionAdjustForm').style.display = 'none';
+  document.getElementById('regionAdjustResult').style.display = 'none';
+  
+  // 清空结果内容
+  document.getElementById('regionAdjustList').textContent = '-';
+  document.getElementById('regionAdjustName').value = '';
+  document.getElementById('regionAdjustId').value = '';
+  document.getElementById('regionAdjustEntUserId').value = '';
+  document.getElementById('regionAdjustParentId').value = '';
+  document.getElementById('regionAdjustContent').textContent = '-';
+  
+  // 清除状态信息
+  const status = document.getElementById('status');
+  status.style.display = 'none';
+  
+  showStatus('监控目录调整页面数据已清除', false);
+  console.log('监控目录调整页面数据清除完成');
+}
+
+
+
+
 
 // 脱敏处理函数
 function maskUserId(userId) {
