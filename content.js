@@ -248,49 +248,85 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
     console.log('设备编码列表:', deviceCodes);
     
     const deviceList = [];
-    console.log("regionCode_",regionCode_)
-    const fetchPromises = deviceCodes.map(deviceCode => {
-      const params = new URLSearchParams({
-        deviceCode: deviceCode,
-        regionCode: regionCode_ || '',
-        pageSize: '1000'
-      });
-      
-      return fetch(`${url}?${params.toString()}`, {
-        method: 'GET',
-        headers: headers,
-        credentials: 'same-origin'
-      })
-      .then(response => response.json())
-      .then(result => {
-        console.log(`设备 ${deviceCode} 响应:`, result);
-        
-        if (result && result.data && result.data.searchRegionDetailRespDtoList && result.data.searchRegionDetailRespDtoList.length > 0) {
-          const deviceInfo = result.data.searchRegionDetailRespDtoList[0];
-          deviceList.push({
-            regionId: deviceInfo.regionCode || '',
-            deviceCode: deviceInfo.deviceCode || '',
-            regionName: deviceInfo.name || '',
-            deviceName: deviceInfo.deviceName || ''
-          });
-          console.log(`✓ 成功获取设备信息: ${deviceInfo.deviceName || deviceInfo.name}`);
-        } else {
-          console.log(`✗ 设备 ${deviceCode} 不存在或获取失败`);
-        }
-      })
-      .catch(err => {
-        console.error(`✗ 设备 ${deviceCode} 请求失败:`, err);
-      });
-    });
+    const batchSize = 5;
+    const totalDevices = deviceCodes.length;
+    let processedCount = 0;
     
-    Promise.all(fetchPromises).then(() => {
+    console.log("regionCode_", regionCode_);
+    
+    // 发送进度更新
+    function sendProgressUpdate(current, total, deviceCode) {
+      const progress = Math.round((current / total) * 100);
+      chrome.runtime.sendMessage({ 
+        action: 'cascadeProgress', 
+        progress: progress, 
+        current: current, 
+        total: total, 
+        deviceCode: deviceCode, 
+        step: '获取设备信息'
+      });
+    }
+    
+    // 分批处理设备
+    async function processBatches() {
+      for (let i = 0; i < deviceCodes.length; i += batchSize) {
+        const batch = deviceCodes.slice(i, i + batchSize);
+        console.log(`处理批次 ${Math.floor(i / batchSize) + 1}:`, batch);
+        
+        const batchPromises = batch.map(deviceCode => {
+          const params = new URLSearchParams({
+            deviceCode: deviceCode,
+            regionCode: regionCode_ || '',
+            pageSize: '1000'
+          });
+          
+          return fetch(`${url}?${params.toString()}`, {
+            method: 'GET',
+            headers: headers,
+            credentials: 'same-origin'
+          })
+          .then(response => response.json())
+          .then(result => {
+            console.log(`设备 ${deviceCode} 响应:`, result);
+            
+            if (result && result.data && result.data.searchRegionDetailRespDtoList && result.data.searchRegionDetailRespDtoList.length > 0) {
+              const deviceInfo = result.data.searchRegionDetailRespDtoList[0];
+              deviceList.push({
+                regionId: deviceInfo.regionCode || '',
+                deviceCode: deviceInfo.deviceCode || '',
+                regionName: deviceInfo.name || '',
+                deviceName: deviceInfo.deviceName || ''
+              });
+              console.log(`✓ 成功获取设备信息: ${deviceInfo.deviceName || deviceInfo.name}`);
+            } else {
+              console.log(`✗ 设备 ${deviceCode} 不存在或获取失败`);
+            }
+            
+            // 更新进度
+            processedCount++;
+            sendProgressUpdate(processedCount, totalDevices, deviceCode);
+          })
+          .catch(err => {
+            console.error(`✗ 设备 ${deviceCode} 请求失败:`, err);
+            // 即使失败也更新进度
+            processedCount++;
+            sendProgressUpdate(processedCount, totalDevices, deviceCode);
+          });
+        });
+        
+        // 等待当前批次处理完成
+        await Promise.all(batchPromises);
+      }
+      
       console.log('=== 设备信息获取完成 ===');
       console.log('设备数量:', deviceList.length);
       console.log('deviceList:', deviceList);
       console.log('deviceList详细信息:');
       console.dir(deviceList);
       sendResponse({ success: true, deviceList: deviceList });
-    });
+    }
+    
+    processBatches();
     
     return true;
   }
@@ -338,99 +374,139 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
     console.log('cascadeCode 存在:', cascadeCode);
     console.log('准备发送级联请求，设备数量:', deviceList.length);
     
-    const taskData = {
-      livePer: '1',
-      backSeePer: '1',
-      voicePer: '1',
-      warnInfoPer: '1',
-      aiServicePer: '1',
-      faceRecognitionPer: '0',
-      vehicleRecognitionPer: '0',
-      cascadeCode: cascadeCode,
-      deviceList: deviceList,
-      taskType: 1,
-      source: 1,
-      deviceCount: deviceList.length,
-      operateAdminId: userId,
-      packageStrategy: 2,
-      customAccount: account,
-      pRegionId: selectedRegionId || '',
-      pRegionName: selectedRegionName || ''
-    };
-    
     const headers = {
       'Accept': 'application/json, text/plain, */*',
       'Accept-Language': 'zh-CN,zh;q=0.9',
       'Content-Type': 'application/json'
     };
     
-    console.log('=== 级联任务请求 ===');
-    console.log('请求地址:', url);
-    console.log('请求头:', JSON.stringify(headers, null, 2));
-    console.log('任务数据:', JSON.stringify(taskData, null, 2));
+    const batchSize = 5;
+    const totalDevices = deviceList.length;
+    let processedCount = 0;
+    const allCascadeResults = [];
     
-    // 发送实际请求
-    console.log('发送级联请求...');
-    
-    fetch(url, {
-      method: 'POST',
-      headers: headers,
-      body: JSON.stringify(taskData),
-      credentials: 'same-origin'
-    })
-    .then(response => {
-      console.log('=== 级联任务响应 ===');
-      console.log('响应状态:', response.status);
-      console.log('响应状态文本:', response.statusText);
-      return response.json();
-    })
-    .then(result => {
-      console.log('响应数据:', JSON.stringify(result, null, 2));
-      
-      // 判断API是否成功
-      const isSuccess = result.code === 20000 || result.code === 0 || result.code === 200;
-      
-      // 生成级联详细结果
-      const cascadeResults = deviceList.map(device => {
-        // 模拟级联结果，实际应用中可能需要根据API返回的详细信息
-        // 这里简单判断：如果任务创建成功，所有设备都视为级联成功
-        return {
-          deviceCode: device.deviceCode,
-          regionId: device.regionId,
-          regionName: device.regionName,
-          deviceName: device.deviceName,
-          success: isSuccess,
-          message: isSuccess ? '级联成功' : result.msg || '级联失败'
-        };
+    // 发送进度更新
+    function sendProgressUpdate(current, total, deviceCode) {
+      const progress = Math.round((current / total) * 100);
+      chrome.runtime.sendMessage({ 
+        action: 'cascadeProgress', 
+        progress: progress, 
+        current: current, 
+        total: total, 
+        deviceCode: deviceCode, 
+        step: '执行级联操作'
       });
+    }
+    
+    // 分批处理设备级联
+    async function processCascadeBatches() {
+      for (let i = 0; i < deviceList.length; i += batchSize) {
+        const batch = deviceList.slice(i, i + batchSize);
+        console.log(`处理级联批次 ${Math.floor(i / batchSize) + 1}:`, batch);
+        
+        const taskData = {
+          livePer: '1',
+          backSeePer: '1',
+          voicePer: '1',
+          warnInfoPer: '1',
+          aiServicePer: '1',
+          faceRecognitionPer: '0',
+          vehicleRecognitionPer: '0',
+          cascadeCode: cascadeCode,
+          deviceList: batch,
+          taskType: 1,
+          source: 1,
+          deviceCount: batch.length,
+          operateAdminId: userId,
+          packageStrategy: 2,
+          customAccount: account,
+          pRegionId: selectedRegionId || '',
+          pRegionName: selectedRegionName || ''
+        };
+        
+        console.log('=== 级联任务请求 ===');
+        console.log('请求地址:', url);
+        console.log('请求头:', JSON.stringify(headers, null, 2));
+        console.log('任务数据:', JSON.stringify(taskData, null, 2));
+        
+        try {
+          // 发送实际请求
+          console.log('发送级联请求...');
+          const response = await fetch(url, {
+            method: 'POST',
+            headers: headers,
+            body: JSON.stringify(taskData),
+            credentials: 'same-origin'
+          });
+          
+          console.log('=== 级联任务响应 ===');
+          console.log('响应状态:', response.status);
+          console.log('响应状态文本:', response.statusText);
+          
+          const result = await response.json();
+          console.log('响应数据:', JSON.stringify(result, null, 2));
+          
+          // 判断API是否成功
+          const isSuccess = result.code === 20000 || result.code === 0 || result.code === 200;
+          
+          // 生成级联详细结果
+          const batchResults = batch.map(device => {
+            // 模拟级联结果，实际应用中可能需要根据API返回的详细信息
+            // 这里简单判断：如果任务创建成功，所有设备都视为级联成功
+            return {
+              deviceCode: device.deviceCode,
+              regionId: device.regionId,
+              regionName: device.regionName,
+              deviceName: device.deviceName,
+              success: isSuccess,
+              message: isSuccess ? '级联成功' : result.msg || '级联失败'
+            };
+          });
+          
+          allCascadeResults.push(...batchResults);
+          
+          // 更新进度
+          for (const device of batch) {
+            processedCount++;
+            sendProgressUpdate(processedCount, totalDevices, device.deviceCode);
+          }
+        } catch (err) {
+          console.error('Content Script请求失败:', err);
+          
+          // 生成失败的级联结果
+          const batchResults = batch.map(device => {
+            return {
+              deviceCode: device.deviceCode,
+              regionId: device.regionId,
+              regionName: device.regionName,
+              deviceName: device.deviceName,
+              success: false,
+              message: err.message || '网络错误'
+            };
+          });
+          
+          allCascadeResults.push(...batchResults);
+          
+          // 更新进度
+          for (const device of batch) {
+            processedCount++;
+            sendProgressUpdate(processedCount, totalDevices, device.deviceCode);
+          }
+        }
+      }
+      
+      console.log('=== 级联操作完成 ===');
+      console.log('级联结果数量:', allCascadeResults.length);
+      console.log('级联详细结果:', allCascadeResults);
       
       sendResponse({ 
         success: true, 
-        data: result, 
-        cascadeResults: cascadeResults 
+        data: { code: 20000, msg: '级联操作完成' }, 
+        cascadeResults: allCascadeResults 
       });
-    })
-    .catch(err => {
-      console.error('Content Script请求失败:', err);
-      
-      // 生成失败的级联结果
-      const cascadeResults = deviceList.map(device => {
-        return {
-          deviceCode: device.deviceCode,
-          regionId: device.regionId,
-          regionName: device.regionName,
-          deviceName: device.deviceName,
-          success: false,
-          message: err.message || '网络错误'
-        };
-      });
-      
-      sendResponse({ 
-        success: false, 
-        error: err.message,
-        cascadeResults: cascadeResults 
-      });
-    });
+    }
+    
+    processCascadeBatches();
     
     return true;
   }

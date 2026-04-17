@@ -294,9 +294,9 @@ function renderRegionTree(regionList, level = 0) {
           <span class="region-id">(ID: ${item.id})</span>
         </div>
         <div style="display: flex; gap: 4px;">
-          <button class="add-subregion-btn" data-id="${item.id}" style="background: green; color: white; border: none; padding: 4px 8px; border-radius: 4px; cursor: pointer; font-size: 12px; font-weight: bold;">+</button>
-          <button class="edit-region-btn" data-id="${item.id}" data-name="${item.name || ''}" style="background: blue; color: white; border: none; padding: 4px 8px; border-radius: 4px; cursor: pointer; font-size: 12px; font-weight: bold;">✏️</button>
-          <button class="delete-region-btn" data-id="${item.id}" style="background: red; color: white; border: none; padding: 4px 8px; border-radius: 4px; cursor: pointer; font-size: 12px; font-weight: bold;">✕</button>
+          <button class="add-subregion-btn" data-id="${item.id}" style="background: linear-gradient(135deg, #10b981 0%, #059669 100%); color: white; border: none; padding: 4px 8px; border-radius: 4px; cursor: pointer; font-size: 12px; font-weight: bold; box-shadow: 0 2px 6px rgba(16, 185, 129, 0.25); border: 1px solid rgba(255, 255, 255, 0.3);">+</button>
+          <button class="edit-region-btn" data-id="${item.id}" data-name="${item.name || ''}" style="background: linear-gradient(135deg, #3b82f6 0%, #60a5fa 100%); color: white; border: none; padding: 4px 8px; border-radius: 4px; cursor: pointer; font-size: 12px; font-weight: bold; box-shadow: 0 2px 6px rgba(59, 130, 246, 0.25); border: 1px solid rgba(255, 255, 255, 0.3);">✏️</button>
+          <button class="delete-region-btn" data-id="${item.id}" style="background: linear-gradient(135deg, #ef4444 0%, #dc2626 100%); color: white; border: none; padding: 4px 8px; border-radius: 4px; cursor: pointer; font-size: 12px; font-weight: bold; box-shadow: 0 2px 6px rgba(239, 68, 68, 0.25); border: 1px solid rgba(255, 255, 255, 0.3);">✕</button>
         </div>
       </li>
     `;
@@ -416,7 +416,7 @@ function addRegionClickHandlers() {
               action: 'saveRegion',
               cusRegionNames: subregionName.trim(),
               cusRegionId: parentId,
-              entUserId: '75509572', // 默认值，实际应该从企业主信息获取
+              entUserId: '', // 默认值，实际应该从企业主信息获取
               isEdit: false
             });
             
@@ -459,7 +459,7 @@ function addRegionClickHandlers() {
               action: 'saveRegion',
               cusRegionNames: newName.trim(),
               cusRegionId: regionId,
-              entUserId: '75509572', // 默认值，实际应该从企业主信息获取
+              entUserId: '', // 默认值，实际应该从企业主信息获取
               isEdit: true
             });
             
@@ -714,6 +714,29 @@ async function createCascadeTask() {
       return;
     }
     
+    // 隐藏CSV文件上传统计
+    const uploadStats = document.getElementById('uploadStats');
+    if (uploadStats) {
+      uploadStats.style.display = 'none';
+    }
+    
+    // 显示进度条
+    const progressContainer = document.getElementById('progressContainer');
+    if (progressContainer) {
+      progressContainer.style.display = 'block';
+    }
+    updateProgress(0, '正在初始化...');
+    
+    // 监听进度更新
+    const progressUpdateListener = (message) => {
+      if (message.action === 'cascadeProgress') {
+        const { progress, current, total, deviceCode, step } = message;
+        updateProgress(progress, `${step}: 处理设备 ${current}/${total}: ${deviceCode}`);
+      }
+    };
+    
+    chrome.runtime.onMessage.addListener(progressUpdateListener);
+    
     console.log('发送getRegionsByDevTreeType消息...');
     const deviceResponse = await chrome.tabs.sendMessage(tab.id, {
       action: 'getRegionsByDevTreeType',
@@ -724,6 +747,12 @@ async function createCascadeTask() {
     
     if (!deviceResponse.success) {
       showStatus('获取设备信息失败: ' + deviceResponse.error, true);
+      // 隐藏进度条
+      if (progressContainer) {
+        progressContainer.style.display = 'none';
+      }
+      // 移除进度更新监听器
+      chrome.runtime.onMessage.removeListener(progressUpdateListener);
       return;
     }
     
@@ -740,6 +769,12 @@ async function createCascadeTask() {
     
     if (deviceList.length === 0) {
       showStatus('所有设备获取失败，请检查设备编码', true);
+      // 隐藏进度条
+      if (progressContainer) {
+        progressContainer.style.display = 'none';
+      }
+      // 移除进度更新监听器
+      chrome.runtime.onMessage.removeListener(progressUpdateListener);
       return;
     }
     
@@ -748,6 +783,12 @@ async function createCascadeTask() {
     
     if (!confirm(confirmMessage)) {
       showStatus('级联操作已取消', false);
+      // 隐藏进度条
+      if (progressContainer) {
+        progressContainer.style.display = 'none';
+      }
+      // 移除进度更新监听器
+      chrome.runtime.onMessage.removeListener(progressUpdateListener);
       return;
     }
     
@@ -875,12 +916,28 @@ async function createCascadeTask() {
         exportCascadeResult(cascadeResults);
       });
     }
+    
+    // 隐藏进度条
+    if (progressContainer) {
+      progressContainer.style.display = 'none';
+    }
+    // 移除进度更新监听器
+    chrome.runtime.onMessage.removeListener(progressUpdateListener);
   } catch (err) {
     console.error('创建级联任务失败:', err);
     console.error('错误堆栈:', err.stack);
     showStatus('创建级联任务失败: ' + err.message, true);
     // 隐藏进度条
-    document.getElementById('progressContainer').style.display = 'none';
+    const progressContainer = document.getElementById('progressContainer');
+    if (progressContainer) {
+      progressContainer.style.display = 'none';
+    }
+    // 移除进度更新监听器
+    chrome.runtime.onMessage.removeListener((message) => {
+      if (message.action === 'cascadeProgress') {
+        return true;
+      }
+    });
   }
 }
 
@@ -895,9 +952,75 @@ document.getElementById('createCascadeTaskBtn').addEventListener('click', create
 document.getElementById('queryDeviceStatusBtn').addEventListener('click', queryDeviceStatus);
 document.getElementById('clearCascadeDataBtn').addEventListener('click', clearCascadeData);
 document.getElementById('clearQueryDataBtn').addEventListener('click', clearQueryData);
+
+// 批量设备查询 - 设备编码输入监听
+document.getElementById('deviceCodesQuery').addEventListener('input', function() {
+  const deviceCodes = this.value.trim();
+  const hasInput = deviceCodes.length > 0;
+  
+  // 隐藏或显示文件上传相关元素
+  document.getElementById('uploadFileLabelQuery').style.display = hasInput ? 'none' : 'block';
+  document.getElementById('dropZoneQuery').style.display = hasInput ? 'none' : 'block';
+  document.getElementById('downloadTemplateQuery').style.display = hasInput ? 'none' : 'inline';
+  document.getElementById('uploadStatsQuery').style.display = hasInput ? 'none' : 'block';
+});
+
 document.getElementById('queryCustomListBtn').addEventListener('click', queryCustomListForDeviceList);
 document.getElementById('queryDeviceListBtn').addEventListener('click', queryDeviceList);
 document.getElementById('clearDeviceListBtn').addEventListener('click', clearDeviceListData);
+
+// 添加根目录按钮
+document.getElementById('addRootRegionBtn').addEventListener('click', async function() {
+  const account = document.getElementById('regionAdjustAccount').value.trim();
+  if (!account) {
+    showStatus('请先输入账号', true);
+    return;
+  }
+  
+  // 从企业主信息中获取entUserId
+  const entUserId = currentEntUserId;
+  if (!entUserId) {
+    showStatus('请先获取企业主信息', true);
+    return;
+  }
+  
+  // 弹出输入框让用户输入目录名称
+  const cusRegionNames = prompt('请输入根目录名称:', '测试');
+  if (!cusRegionNames || cusRegionNames.trim() === '') {
+    showStatus('目录名称不能为空', true);
+    return;
+  }
+  
+  try {
+    const tab = await getVcpTab();
+    if (!tab) {
+      showStatus('请先登录 <a href="https://vcp.21cn.com/vcpCamera/web/index.html#/nopasslogin" target="_blank">天翼云眼视频监控平台</a>', true);
+      return;
+    }
+    
+    // 通过content.js发送请求
+    const response = await chrome.tabs.sendMessage(tab.id, {
+      action: 'saveRegion',
+      cusRegionNames: cusRegionNames.trim(),
+      cusRegionId: '', // 根目录的父ID为空
+      entUserId: entUserId,
+      isEdit: false
+    });
+    
+    console.log('添加根目录响应:', response);
+    
+    if (response.success) {
+      showStatus('添加根目录成功', false);
+      // 重新查询监控目录
+      document.getElementById('queryRegionAdjustBtn').click();
+    } else {
+      showStatus('添加根目录失败: ' + response.error, true);
+    }
+  } catch (err) {
+    console.error('添加根目录失败:', err);
+    showStatus('添加根目录失败: ' + err.message, true);
+  }
+});
 
 // 停止查询按钮
 if (document.getElementById('stopQueryBtn')) {
@@ -1484,8 +1607,13 @@ function clearQueryData() {
     uploadFileGroup.style.display = 'block';
   }
   
+  // 显示文件上传相关元素
+  document.getElementById('uploadFileLabelQuery').style.display = 'block';
+  document.getElementById('dropZoneQuery').style.display = 'block';
+  document.getElementById('downloadTemplateQuery').style.display = 'inline';
+  document.getElementById('uploadStatsQuery').style.display = 'block';
+  
   // 隐藏结果区域
-  document.getElementById('uploadStatsQuery').classList.add('hidden');
   document.getElementById('deviceStatusResult').classList.add('hidden');
   
   // 清空结果内容
@@ -1738,7 +1866,7 @@ async function queryDeviceList() {
   const selectedRadio = document.querySelector('.custom-radio:checked');
   if (!selectedRadio) {
     showStatus('请先选择企业主', true);
-  return;
+    return;
   }
   
   const userId = selectedRadio.getAttribute('data-id');
@@ -1952,9 +2080,9 @@ function clearDeviceListData() {
   document.getElementById('deviceListAccount').value = '';
   
   // 隐藏结果区域
-  document.getElementById('customListResultDeviceList').classList.add('hidden');
-  document.getElementById('deviceListResult').classList.add('hidden');
-  document.getElementById('deviceListProgress').classList.add('hidden');
+  document.getElementById('customListResultDeviceList').style.display = 'none';
+  document.getElementById('deviceListResult').style.display = 'none';
+  document.getElementById('deviceListProgress').style.display = 'none';
   
   // 隐藏停止按钮
   document.getElementById('stopQueryBtn').style.display = 'none';
@@ -2074,6 +2202,10 @@ async function queryCustomListForRegionAdjust() {
         
         if (qiyezhuList.length > 0) {
           showStatus('该账户是企业主，正在获取监控目录...');
+          
+          // 存储企业主ID
+          currentEntUserId = qiyezhuList[0].id;
+          console.log('存储企业主ID:', currentEntUserId);
           
           await getUserRegionListForRegionAdjust(qiyezhuList[0].id);
         } else {
@@ -2237,6 +2369,9 @@ function maskPhone(phone) {
 }
 
 let currentUserId = '';
+
+// 全局变量：企业主ID（用于监控目录调整）
+let currentEntUserId = '';
 let currentAccount = '';
 
 async function autoFillUserId() {

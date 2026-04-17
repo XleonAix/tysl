@@ -624,6 +624,19 @@
       <button id="clearCascadeDataBtn" class="refresh-btn" style="flex: 1; background: linear-gradient(135deg, #ef4444 0%, #dc2626 100%);">🗑️ 清除数据</button>
     </div>
     
+    <div id="progressContainer" class="progress-container hidden">
+      <div class="progress-label">
+        <span>📊 级联进度</span>
+        <div style="display: flex; align-items: center; gap: 8px;">
+          <span id="progressPercent">0%</span>
+        </div>
+      </div>
+      <div class="progress-bar">
+        <div id="progressFill" class="progress-fill"></div>
+      </div>
+      <div id="progressText" class="progress-text">正在初始化...</div>
+    </div>
+    
     <div id="cascadeTaskResult" class="result-box hidden">
       <div class="result-label">级联任务结果:</div>
       <div id="cascadeTask" class="content-box">-</div>
@@ -727,7 +740,10 @@
 
     
     <div id="regionAdjustListResult" class="result-box hidden">
-      <div class="result-label">监控目录列表:</div>
+      <div class="result-label" style="display: flex; justify-content: space-between; align-items: center;">
+        <span>监控目录列表:</span>
+        <button id="addRootRegionBtn" class="query-btn" style="padding: 6px 12px; font-size: 10px;">➕ 添加根目录</button>
+      </div>
       <div id="regionAdjustList" class="content-box" style="max-height: 200px; overflow-y: auto;">-</div>
     </div>
     
