@@ -64,346 +64,251 @@ function detectAccount() {
   return matched ? String(matched) : '';
 }
 
+const DEFAULT_HEADERS = {
+  'Accept': 'application/json, text/plain, */*',
+  'Accept-Language': 'zh-CN,zh;q=0.9'
+};
+
+function vcpFetch(url, options = {}) {
+  return fetch(url, {
+    ...options,
+    headers: { ...DEFAULT_HEADERS, ...(options.headers || {}) },
+    credentials: 'same-origin'
+  }).then(response => {
+    if (response.url.includes('unifyAccountLogout.do')) {
+      return Promise.reject(new Error('需要登录'));
+    }
+    return response.json();
+  });
+}
+
+function vcpGet(url, params) {
+  const queryString = params ? `?${params.toString()}` : '';
+  return vcpFetch(`${url}${queryString}`);
+}
+
+function vcpPost(url, data, contentType = 'application/x-www-form-urlencoded') {
+  return vcpFetch(url, {
+    method: 'POST',
+    headers: { 'Content-Type': contentType },
+    body: contentType === 'application/json' ? JSON.stringify(data) : data
+  });
+}
+
 chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
   if (request.action === 'getUserId') {
     const userId = detectOperateAdminId();
     const account = detectAccount();
-    console.log('自动检测到的userId:', userId);
-    console.log('自动检测到的account:', account);
     sendResponse({ success: true, userId: userId, account: account });
     return true;
   }
 
   if (request.action === 'getUserRegionList') {
     const { userId } = request;
-    const url = 'https://vcp.21cn.com/vcpCamera/user/getUserRegionList';
-    
     const data = new URLSearchParams();
     data.append('userId', userId);
-    
-    const headers = {
-      'Accept': 'application/json, text/plain, */*',
-      'Accept-Language': 'zh-CN,zh;q=0.9',
-      'Content-Type': 'application/x-www-form-urlencoded'
-    };
-    
-    console.log('Content Script发送请求:', url);
-    console.log('请求体:', data.toString());
-    
-    fetch(url, {
-      method: 'POST',
-      headers: headers,
-      body: data,
-      credentials: 'same-origin'
-    })
-    .then(response => response.json())
-    .then(result => {
-      console.log('Content Script响应:', result);
-      if (result.code === 0 && result.data && result.data.length > 0) {
-        regionCode_ = result.data[0].regionCode;
-        console.log('全局变量已保存 - regionCode_:', regionCode_);
-        sendResponse({ success: true, regionCode: result.data[0].regionCode });
-      } else {
-        sendResponse({ success: false, error: result.msg || '用户未登录，请登录！' });
-      }
-    })
-    .catch(err => {
-      console.error('Content Script请求失败:', err);
-      sendResponse({ success: false, error: err.message });
-    });
-    
+
+    vcpPost('https://vcp.21cn.com/vcpCamera/user/getUserRegionList', data)
+      .then(result => {
+        if (result.code === 0 && result.data && result.data.length > 0) {
+          regionCode_ = result.data[0].regionCode;
+          sendResponse({ success: true, regionCode: result.data[0].regionCode });
+        } else {
+          sendResponse({ success: false, error: result.msg || '用户未登录，请登录！' });
+        }
+      })
+      .catch(err => {
+        console.error('getUserRegionList失败:', err);
+        sendResponse({ success: false, error: err.message });
+      });
+
     return true;
   }
-  
+
   if (request.action === 'getCustomList') {
     const { userId, account } = request;
-    const url = 'https://vcp.21cn.com/vcpCamera/oper/custom/getCustomList';
-    
     const params = new URLSearchParams({
       pageNo: '1',
       pageSize: '50',
       userId: userId,
       account: account
     });
-    
-    const headers = {
-      'Accept': 'application/json, text/plain, */*',
-      'Accept-Language': 'zh-CN,zh;q=0.9'
-    };
-    
-    console.log('Content Script发送请求:', url);
-    console.log('请求参数:', params.toString());
-    
-    fetch(`${url}?${params.toString()}`, {
-      method: 'GET',
-      headers: headers,
-      credentials: 'same-origin'
-    })
-    .then(response => response.json())
-    .then(result => {
-      console.log('Content Script响应:', result);
-      
-      if (result.data && result.data.list) {
-        const qiyezhuList = result.data.list.filter(item => item.roleName === '企业主');
-        
-        if (qiyezhuList.length > 0) {
-          cascadeCode = qiyezhuList[0].cascadeCode;
-          entUserId = qiyezhuList[0].id;
-          console.log('全局变量已保存 - cascadeCode:', cascadeCode, 'entUserId:', entUserId);
+
+    vcpGet('https://vcp.21cn.com/vcpCamera/oper/custom/getCustomList', params)
+      .then(result => {
+        if (result.data && result.data.list) {
+          const qiyezhuList = result.data.list.filter(item => item.roleName === '企业主');
+          if (qiyezhuList.length > 0) {
+            cascadeCode = qiyezhuList[0].cascadeCode;
+            entUserId = qiyezhuList[0].id;
+          }
         }
-      }
-      
-      sendResponse({ success: true, data: result });
-    })
-    .catch(err => {
-      console.error('Content Script请求失败:', err);
-      sendResponse({ success: false, error: err.message });
-    });
-    
+        sendResponse({ success: true, data: result });
+      })
+      .catch(err => {
+        console.error('getCustomList失败:', err);
+        sendResponse({ success: false, error: err.message });
+      });
+
     return true;
   }
-  
+
   if (request.action === 'getGlobalValues') {
-    console.log('获取全局变量 - cascadeCode:', cascadeCode, 'entUserId:', entUserId);
-    sendResponse({ 
-      success: true, 
-      cascadeCode: cascadeCode, 
-      entUserId: entUserId 
+    sendResponse({
+      success: true,
+      cascadeCode: cascadeCode,
+      entUserId: entUserId
     });
     return true;
   }
-  
+
   if (request.action === 'getLevelCusRegion') {
     const { cusRegionId = '' } = request;
-    const url = 'https://vcp.21cn.com/vcpCamera/cusRegion/getLevelCusRegion';
-    
     const params = new URLSearchParams({
       cusRegionId: cusRegionId,
       type: '1',
       role: '8',
       entUserId: entUserId || ''
     });
-    
-    const headers = {
-      'Accept': 'application/json, text/plain, */*',
-      'Accept-Language': 'zh-CN,zh;q=0.9'
-    };
-    
-    console.log('Content Script发送请求:', url);
-    console.log('请求参数:', params.toString());
-    
-    fetch(`${url}?${params.toString()}`, {
-      method: 'GET',
-      headers: headers,
-      credentials: 'same-origin'
-    })
-    .then(response => response.json())
-    .then(result => {
-      console.log('Content Script响应:', result);
-      
-      if (result && result.data && result.data.cusRegionList) {
-        const processRegionList = (regionList) => {
-          return regionList.map(item => {
-            const hasChild = item.hasChild === 1 || item.hasChild === '1' || item.hasChild === true;
-            
-            if (hasChild && item.children) {
-              return {
-                ...item,
-                hasChild: hasChild,
-                children: processRegionList(item.children)
-              };
-            }
-            
-            return {
-              ...item,
-              hasChild: hasChild
-            };
-          });
-        };
-        
-        result.data.cusRegionList = processRegionList(result.data.cusRegionList);
-      }
-      
-      sendResponse({ success: true, data: result });
-    })
-    .catch(err => {
-      console.error('Content Script请求失败:', err);
-      sendResponse({ success: false, error: err.message });
-    });
-    
+
+    vcpGet('https://vcp.21cn.com/vcpCamera/cusRegion/getLevelCusRegion', params)
+      .then(result => {
+        if (result && result.data && result.data.cusRegionList) {
+          const processRegionList = (regionList) => {
+            return regionList.map(item => {
+              const hasChild = item.hasChild === 1 || item.hasChild === '1' || item.hasChild === true;
+              if (hasChild && item.children) {
+                return { ...item, hasChild, children: processRegionList(item.children) };
+              }
+              return { ...item, hasChild };
+            });
+          };
+          result.data.cusRegionList = processRegionList(result.data.cusRegionList);
+        }
+        sendResponse({ success: true, data: result });
+      })
+      .catch(err => {
+        console.error('getLevelCusRegion失败:', err);
+        sendResponse({ success: false, error: err.message });
+      });
+
     return true;
   }
-  
+
   if (request.action === 'getRegionsByDevTreeType') {
     const { deviceCodes } = request;
     const url = 'https://vcp.21cn.com/vcpCamera/oper/custom/getRegionsByDevTreeType';
-    
-    const headers = {
-      'Accept': 'application/json, text/plain, */*',
-      'Accept-Language': 'zh-CN,zh;q=0.9',
-      'Content-Type': 'application/json'
-    };
-    
-    console.log('Content Script发送请求:', url);
-    console.log('设备编码列表:', deviceCodes);
-    
     const deviceList = [];
     const batchSize = 5;
     const totalDevices = deviceCodes.length;
     let processedCount = 0;
-    
-    console.log("regionCode_", regionCode_);
-    
-    // 发送进度更新
+
     function sendProgressUpdate(current, total, deviceCode) {
       const progress = Math.round((current / total) * 100);
-      chrome.runtime.sendMessage({ 
-        action: 'cascadeProgress', 
-        progress: progress, 
-        current: current, 
-        total: total, 
-        deviceCode: deviceCode, 
+      chrome.runtime.sendMessage({
+        action: 'cascadeProgress',
+        progress: progress,
+        current: current,
+        total: total,
+        deviceCode: deviceCode,
         step: '获取设备信息'
       });
     }
-    
-    // 分批处理设备
+
     async function processBatches() {
       for (let i = 0; i < deviceCodes.length; i += batchSize) {
         const batch = deviceCodes.slice(i, i + batchSize);
-        console.log(`处理批次 ${Math.floor(i / batchSize) + 1}:`, batch);
-        
         const batchPromises = batch.map(deviceCode => {
           const params = new URLSearchParams({
             deviceCode: deviceCode,
             regionCode: regionCode_ || '',
             pageSize: '1000'
           });
-          
-          return fetch(`${url}?${params.toString()}`, {
-            method: 'GET',
-            headers: headers,
-            credentials: 'same-origin'
-          })
-          .then(response => response.json())
-          .then(result => {
-            console.log(`设备 ${deviceCode} 响应:`, result);
-            
-            if (result && result.data && result.data.searchRegionDetailRespDtoList && result.data.searchRegionDetailRespDtoList.length > 0) {
-              const deviceInfo = result.data.searchRegionDetailRespDtoList[0];
-              deviceList.push({
-                regionId: deviceInfo.regionCode || '',
-                deviceCode: deviceInfo.deviceCode || '',
-                regionName: deviceInfo.name || '',
-                deviceName: deviceInfo.deviceName || ''
-              });
-              console.log(`✓ 成功获取设备信息: ${deviceInfo.deviceName || deviceInfo.name}`);
-            } else {
-              console.log(`✗ 设备 ${deviceCode} 不存在或获取失败`);
-            }
-            
-            // 更新进度
-            processedCount++;
-            sendProgressUpdate(processedCount, totalDevices, deviceCode);
-          })
-          .catch(err => {
-            console.error(`✗ 设备 ${deviceCode} 请求失败:`, err);
-            // 即使失败也更新进度
-            processedCount++;
-            sendProgressUpdate(processedCount, totalDevices, deviceCode);
-          });
+
+          return vcpGet(url, params)
+            .then(result => {
+              if (result && result.data && result.data.searchRegionDetailRespDtoList && result.data.searchRegionDetailRespDtoList.length > 0) {
+                const deviceInfo = result.data.searchRegionDetailRespDtoList[0];
+                deviceList.push({
+                  regionId: deviceInfo.regionCode || '',
+                  deviceCode: deviceInfo.deviceCode || '',
+                  regionName: deviceInfo.name || '',
+                  deviceName: deviceInfo.deviceName || ''
+                });
+              }
+            })
+            .catch(err => {
+              console.error(`设备 ${deviceCode} 请求失败:`, err);
+            })
+            .finally(() => {
+              processedCount++;
+              sendProgressUpdate(processedCount, totalDevices, deviceCode);
+            });
         });
-        
-        // 等待当前批次处理完成
         await Promise.all(batchPromises);
       }
-      
-      console.log('=== 设备信息获取完成 ===');
-      console.log('设备数量:', deviceList.length);
-      console.log('deviceList:', deviceList);
-      console.log('deviceList详细信息:');
-      console.dir(deviceList);
       sendResponse({ success: true, deviceList: deviceList });
     }
-    
+
     processBatches();
-    
     return true;
   }
-  
+
   if (request.action === 'getSelectedRegion') {
-    console.log('获取选中的目录 - regionId:', selectedRegionId, 'regionName:', selectedRegionName);
-    sendResponse({ 
-      success: true, 
-      regionId: selectedRegionId, 
-      regionName: selectedRegionName 
+    sendResponse({
+      success: true,
+      regionId: selectedRegionId,
+      regionName: selectedRegionName
     });
     return true;
   }
-  
+
   if (request.action === 'createCascadeTask') {
-    console.log('收到 createCascadeTask 请求:', request);
     const { userId, account, deviceList } = request;
     const url = 'https://vcp.21cn.com/vcpCamera/cascade/addCascadeTaskOperator';
-    
-    // 检查 cascadeCode 是否存在
+
     if (!cascadeCode) {
-      console.error('cascadeCode 为空，无法执行级联操作');
-      
-      // 生成失败的级联结果
-      const cascadeResults = deviceList.map(device => {
-        return {
-          deviceCode: device.deviceCode,
-          regionId: device.regionId,
-          regionName: device.regionName,
-          deviceName: device.deviceName,
-          success: false,
-          message: 'cascadeCode 为空，无法执行级联操作'
-        };
-      });
-      
-      sendResponse({ 
-        success: false, 
+      const cascadeResults = deviceList.map(device => ({
+        deviceCode: device.deviceCode,
+        regionId: device.regionId,
+        regionName: device.regionName,
+        deviceName: device.deviceName,
+        success: false,
+        message: 'cascadeCode 为空，无法执行级联操作'
+      }));
+      sendResponse({
+        success: false,
         error: 'cascadeCode 为空，无法执行级联操作',
-        cascadeResults: cascadeResults 
+        cascadeResults: cascadeResults
       });
-      
       return true;
     }
-    
-    console.log('cascadeCode 存在:', cascadeCode);
-    console.log('准备发送级联请求，设备数量:', deviceList.length);
-    
-    const headers = {
-      'Accept': 'application/json, text/plain, */*',
-      'Accept-Language': 'zh-CN,zh;q=0.9',
-      'Content-Type': 'application/json'
-    };
-    
-    const batchSize = 5;
+
+    const batchSize = 80;
     const totalDevices = deviceList.length;
     let processedCount = 0;
     const allCascadeResults = [];
-    
-    // 发送进度更新
+
     function sendProgressUpdate(current, total, deviceCode) {
       const progress = Math.round((current / total) * 100);
-      chrome.runtime.sendMessage({ 
-        action: 'cascadeProgress', 
-        progress: progress, 
-        current: current, 
-        total: total, 
-        deviceCode: deviceCode, 
+      chrome.runtime.sendMessage({
+        action: 'cascadeProgress',
+        progress: progress,
+        current: current,
+        total: total,
+        deviceCode: deviceCode,
         step: '执行级联操作'
       });
     }
-    
-    // 分批处理设备级联
+
+    function delay(ms) {
+      return new Promise(resolve => setTimeout(resolve, ms));
+    }
+
     async function processCascadeBatches() {
       for (let i = 0; i < deviceList.length; i += batchSize) {
         const batch = deviceList.slice(i, i + batchSize);
-        console.log(`处理级联批次 ${Math.floor(i / batchSize) + 1}:`, batch);
-        
+
         const taskData = {
           livePer: '1',
           backSeePer: '1',
@@ -421,389 +326,240 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
           packageStrategy: 2,
           customAccount: account,
           pRegionId: selectedRegionId || '',
-          pRegionName: selectedRegionName || ''
+          pRegionName: selectedRegionName || '',
+          regionCode: regionCode_ || ''
         };
-        
-        console.log('=== 级联任务请求 ===');
-        console.log('请求地址:', url);
-        console.log('请求头:', JSON.stringify(headers, null, 2));
-        console.log('任务数据:', JSON.stringify(taskData, null, 2));
-        
+
         try {
-          // 发送实际请求
-          console.log('发送级联请求...');
-          const response = await fetch(url, {
+          const result = await vcpFetch(url, {
             method: 'POST',
-            headers: headers,
-            body: JSON.stringify(taskData),
-            credentials: 'same-origin'
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(taskData)
           });
-          
-          console.log('=== 级联任务响应 ===');
-          console.log('响应状态:', response.status);
-          console.log('响应状态文本:', response.statusText);
-          
-          const result = await response.json();
-          console.log('响应数据:', JSON.stringify(result, null, 2));
-          
-          // 判断API是否成功
+
           const isSuccess = result.code === 20000 || result.code === 0 || result.code === 200;
-          
-          // 生成级联详细结果
-          const batchResults = batch.map(device => {
-            // 模拟级联结果，实际应用中可能需要根据API返回的详细信息
-            // 这里简单判断：如果任务创建成功，所有设备都视为级联成功
-            return {
-              deviceCode: device.deviceCode,
-              regionId: device.regionId,
-              regionName: device.regionName,
-              deviceName: device.deviceName,
-              success: isSuccess,
-              message: isSuccess ? '级联成功' : result.msg || '级联失败'
-            };
-          });
-          
+          const batchResults = batch.map(device => ({
+            deviceCode: device.deviceCode,
+            regionId: device.regionId,
+            regionName: device.regionName,
+            deviceName: device.deviceName,
+            success: isSuccess,
+            message: isSuccess ? '级联成功' : result.msg || '级联失败'
+          }));
           allCascadeResults.push(...batchResults);
-          
-          // 更新进度
+
           for (const device of batch) {
             processedCount++;
             sendProgressUpdate(processedCount, totalDevices, device.deviceCode);
           }
         } catch (err) {
-          console.error('Content Script请求失败:', err);
-          
-          // 生成失败的级联结果
-          const batchResults = batch.map(device => {
-            return {
-              deviceCode: device.deviceCode,
-              regionId: device.regionId,
-              regionName: device.regionName,
-              deviceName: device.deviceName,
-              success: false,
-              message: err.message || '网络错误'
-            };
-          });
-          
+          console.error('级联请求失败:', err);
+          const batchResults = batch.map(device => ({
+            deviceCode: device.deviceCode,
+            regionId: device.regionId,
+            regionName: device.regionName,
+            deviceName: device.deviceName,
+            success: false,
+            message: err.message || '网络错误'
+          }));
           allCascadeResults.push(...batchResults);
-          
-          // 更新进度
+
           for (const device of batch) {
             processedCount++;
             sendProgressUpdate(processedCount, totalDevices, device.deviceCode);
           }
         }
+
+
       }
-      
-      console.log('=== 级联操作完成 ===');
-      console.log('级联结果数量:', allCascadeResults.length);
-      console.log('级联详细结果:', allCascadeResults);
-      
-      sendResponse({ 
-        success: true, 
-        data: { code: 20000, msg: '级联操作完成' }, 
-        cascadeResults: allCascadeResults 
+
+      sendResponse({
+        success: true,
+        data: { code: 20000, msg: '级联操作完成' },
+        cascadeResults: allCascadeResults
       });
     }
-    
+
     processCascadeBatches();
-    
     return true;
   }
-  
+
   if (request.action === 'setSelectedRegion') {
     const { regionId, regionName } = request;
     selectedRegionId = regionId;
     selectedRegionName = regionName;
-    console.log('全局变量已保存 - selectedRegionId:', selectedRegionId, 'selectedRegionName:', selectedRegionName);
     sendResponse({ success: true });
     return true;
   }
-  
+
   if (request.action === 'getDeviceOnlineStatus') {
     const { deviceCodes } = request;
     const deviceInfoUrl = 'https://vcp.21cn.com/vcpCamera/device/getUserDeviceListByEs';
     const deviceStatusUrl = 'https://vcp.21cn.com/vcpCamera/device/getDeviceOnlineStatus';
-    
-    const headers = {
-      'Accept': 'application/json, text/plain, */*',
-      'Accept-Language': 'zh-CN,zh;q=0.9'
-    };
-    
-    console.log('Content Script发送请求:', deviceInfoUrl);
-    console.log('设备编码列表:', deviceCodes);
-    
+
     const deviceStatusList = [];
     const deviceInfoMap = new Map();
     let processedCount = 0;
     const totalCount = deviceCodes.length;
-    
-    // 发送进度更新
+
     function sendProgressUpdate(current, deviceCode) {
       const progress = Math.round((current / totalCount) * 100);
-      chrome.runtime.sendMessage({ 
-        action: 'deviceStatusProgress', 
-        progress: progress, 
-        current: current, 
-        total: totalCount, 
-        deviceCode: deviceCode 
+      chrome.runtime.sendMessage({
+        action: 'deviceStatusProgress',
+        progress: progress,
+        current: current,
+        total: totalCount,
+        deviceCode: deviceCode
       });
     }
-    
-    // 第一步：逐个获取设备信息
-    const fetchPromises = deviceCodes.map((deviceCode, index) => {
+
+    const fetchPromises = deviceCodes.map((deviceCode) => {
       const params = new URLSearchParams({
         deviceCode: deviceCode,
         size: '20',
         queryType: '0',
         deviceType: '0'
       });
-      
-      return fetch(`${deviceInfoUrl}?${params.toString()}`, {
-        method: 'GET',
-        headers: headers,
-        credentials: 'same-origin'
-      })
-      .then(response => response.json())
-      .then(result => {
-        console.log(`设备 ${deviceCode} 信息响应:`, result);
-        
-        // 判断API返回的数据，code为0且data为空数组表示设备编码有误
-        if (result && result.code === 0 && (!result.data || result.data.length === 0)) {
-          console.log(`✗ 设备 ${deviceCode} 编码有误 (code: 0, data: [])`);
-          deviceInfoMap.set(deviceCode, {
-            deviceName: '',
-            deviceCode: deviceCode,
-            valid: false
-          });
-          // 直接标记为设备编码有误
-          deviceStatusList.push({
-            deviceCode: deviceCode,
-            deviceName: '',
-            online: false,
-            message: '设备编码有误'
-          });
-        } else if (result && result.data && result.data.length > 0) {
-          const deviceInfo = result.data[0];
-          deviceInfoMap.set(deviceCode, {
-            deviceName: deviceInfo.deviceName || deviceInfo.name || '',
-            deviceCode: deviceInfo.deviceCode || deviceCode,
-            valid: true
-          });
-          console.log(`✓ 成功获取设备信息: ${deviceInfo.deviceName || deviceInfo.name}`);
-        } else {
-          console.log(`✗ 设备 ${deviceCode} 不存在或获取失败`);
-          deviceInfoMap.set(deviceCode, {
-            deviceName: '',
-            deviceCode: deviceCode,
-            valid: false
-          });
-          // 直接标记为设备编码有误
-          deviceStatusList.push({
-            deviceCode: deviceCode,
-            deviceName: '',
-            online: false,
-            message: '设备编码有误'
-          });
-        }
-      })
-      .catch(err => {
-        console.error(`✗ 设备 ${deviceCode} 请求失败:`, err);
-        deviceInfoMap.set(deviceCode, {
-          deviceName: '',
-          deviceCode: deviceCode,
-          valid: false
-        });
-        // 直接标记为设备编码有误
-        deviceStatusList.push({
-          deviceCode: deviceCode,
-          deviceName: '',
-          online: false,
-          message: '设备编码有误'
-        });
-      })
-      .finally(() => {
-        processedCount++;
-        sendProgressUpdate(processedCount, deviceCode);
-      });
-    });
-    
-    Promise.all(fetchPromises).then(() => {
-      console.log('=== 设备信息获取完成 ===');
-      console.log('设备信息映射:', deviceInfoMap);
-      
-      // 第二步：只对有效的设备查询在线状态
-      const validDeviceCodes = deviceCodes.filter(deviceCode => {
-        const deviceInfo = deviceInfoMap.get(deviceCode);
-        return deviceInfo && deviceInfo.valid;
-      });
-      
-      console.log('有效设备编码:', validDeviceCodes);
-      
-      if (validDeviceCodes.length === 0) {
-        console.log('没有有效的设备编码，直接返回结果');
-        sendResponse({ success: true, deviceStatusList: deviceStatusList });
-        return;
-      }
-      
-      const statusPromises = validDeviceCodes.map(deviceCode => {
-        const params = new URLSearchParams({
-          deviceCode: deviceCode
-        });
-        
-        console.log(`查询设备 ${deviceCode} 在线状态:`, `${deviceStatusUrl}?${params.toString()}`);
-        
-        return fetch(`${deviceStatusUrl}?${params.toString()}`, {
-          method: 'GET',
-          headers: headers,
-          credentials: 'same-origin'
-        })
-        .then(response => {
-          console.log(`设备 ${deviceCode} 在线状态响应:`, response.status);
-          return response.json();
-        })
+
+      return vcpGet(deviceInfoUrl, params)
         .then(result => {
-          console.log(`设备 ${deviceCode} 在线状态数据:`, JSON.stringify(result, null, 2));
-          
-          const deviceInfo = deviceInfoMap.get(deviceCode) || { deviceName: '', deviceCode: deviceCode };
-          
-          if (result && result.data !== undefined) {
-            const deviceStatus = result.data;
-            console.log(`设备 ${deviceCode} 在线状态值:`, deviceStatus, `(1=在线, 0=离线)`);
-            
-            const isOnline = deviceStatus === 1;
-            console.log(`设备 ${deviceCode} 判断结果:`, isOnline ? '在线' : '离线');
-            
+          if (result && result.code === 0 && (!result.data || result.data.length === 0)) {
+            deviceInfoMap.set(deviceCode, { deviceName: '', deviceCode, valid: false });
             deviceStatusList.push({
-              deviceCode: deviceCode,
-              deviceName: deviceInfo.deviceName,
-              online: isOnline,
-              message: isOnline ? '设备在线' : '设备离线'
+              deviceCode,
+              deviceName: '',
+              online: false,
+              message: '设备编码有误'
+            });
+          } else if (result && result.data && result.data.length > 0) {
+            const deviceInfo = result.data[0];
+            deviceInfoMap.set(deviceCode, {
+              deviceName: deviceInfo.deviceName || deviceInfo.name || '',
+              deviceCode: deviceInfo.deviceCode || deviceCode,
+              valid: true
             });
           } else {
-            console.log(`设备 ${deviceCode} 查询失败:`, result);
+            deviceInfoMap.set(deviceCode, { deviceName: '', deviceCode, valid: false });
             deviceStatusList.push({
-              deviceCode: deviceCode,
-              deviceName: deviceInfo.deviceName,
+              deviceCode,
+              deviceName: '',
               online: false,
-              message: '查询失败: ' + (result.msg || '未知错误')
+              message: '设备编码有误'
             });
           }
         })
         .catch(err => {
-          console.error(`设备 ${deviceCode} 在线状态查询失败:`, err);
-          
-          const deviceInfo = deviceInfoMap.get(deviceCode) || { deviceName: '', deviceCode: deviceCode };
+          console.error(`设备 ${deviceCode} 请求失败:`, err);
+          deviceInfoMap.set(deviceCode, { deviceName: '', deviceCode, valid: false });
           deviceStatusList.push({
-            deviceCode: deviceCode,
-            deviceName: deviceInfo.deviceName,
+            deviceCode,
+            deviceName: '',
             online: false,
-            message: '网络错误: ' + err.message
+            message: '设备编码有误'
           });
+        })
+        .finally(() => {
+          processedCount++;
+          sendProgressUpdate(processedCount, deviceCode);
         });
+    });
+
+    Promise.all(fetchPromises).then(() => {
+      const validDeviceCodes = deviceCodes.filter(deviceCode => {
+        const info = deviceInfoMap.get(deviceCode);
+        return info && info.valid;
       });
-      
+
+      if (validDeviceCodes.length === 0) {
+        sendResponse({ success: true, deviceStatusList: deviceStatusList });
+        return;
+      }
+
+      const statusPromises = validDeviceCodes.map(deviceCode => {
+        const params = new URLSearchParams({ deviceCode });
+
+        return vcpGet(deviceStatusUrl, params)
+          .then(result => {
+            const deviceInfo = deviceInfoMap.get(deviceCode) || { deviceName: '', deviceCode };
+            if (result && result.data !== undefined) {
+              const isOnline = result.data === 1;
+              deviceStatusList.push({
+                deviceCode,
+                deviceName: deviceInfo.deviceName,
+                online: isOnline,
+                message: isOnline ? '设备在线' : '设备离线'
+              });
+            } else {
+              deviceStatusList.push({
+                deviceCode,
+                deviceName: deviceInfo.deviceName,
+                online: false,
+                message: '查询失败: ' + (result.msg || '未知错误')
+              });
+            }
+          })
+          .catch(err => {
+            console.error(`设备 ${deviceCode} 在线状态查询失败:`, err);
+            const deviceInfo = deviceInfoMap.get(deviceCode) || { deviceName: '', deviceCode };
+            deviceStatusList.push({
+              deviceCode,
+              deviceName: deviceInfo.deviceName,
+              online: false,
+              message: '网络错误: ' + err.message
+            });
+          });
+      });
+
       Promise.all(statusPromises).then(() => {
-        console.log('=== 设备在线状态查询完成 ===');
-        console.log('设备数量:', deviceStatusList.length);
-        console.log('设备状态列表:', deviceStatusList);
-        
         sendResponse({ success: true, deviceStatusList: deviceStatusList });
       });
     });
-    
+
     return true;
   }
-  
+
   if (request.action === 'getEnterpriseUserDeviceList') {
     const { userId, pageNo, pageSize } = request;
-    const url = 'https://vcp.21cn.com/vcpCamera/device/getEnterpriseUserDeviceList';
-    
-    const params = new URLSearchParams({
-      userId: userId,
-      pageNo: pageNo,
-      pageSize: pageSize
-    });
-    
-    const headers = {
-      'Accept': 'application/json, text/plain, */*',
-      'Accept-Language': 'zh-CN,zh;q=0.9'
-    };
-    
-    console.log('Content Script发送请求:', url);
-    console.log('请求参数:', params.toString());
-    
-    fetch(`${url}?${params.toString()}`, {
-      method: 'GET',
-      headers: headers,
-      credentials: 'same-origin'
-    })
-    .then(response => response.json())
-    .then(result => {
-      console.log('Content Script响应:', result);
-      
-      sendResponse({ success: true, data: result });
-    })
-    .catch(err => {
-      console.error('Content Script请求失败:', err);
-      sendResponse({ success: false, error: err.message });
-    });
-    
+    const params = new URLSearchParams({ userId, pageNo, pageSize });
+
+    vcpGet('https://vcp.21cn.com/vcpCamera/device/getEnterpriseUserDeviceList', params)
+      .then(result => {
+        sendResponse({ success: true, data: result });
+      })
+      .catch(err => {
+        console.error('getEnterpriseUserDeviceList失败:', err);
+        sendResponse({ success: false, error: err.message });
+      });
+
     return true;
   }
-  
+
   if (request.action === 'getDeviceScreenShot') {
     const { deviceCode } = request;
     const url = `https://vcp.21cn.com/vcpCamera/tag/getDeviceScreenShot?deviceCode=${deviceCode}`;
-    
-    const headers = {
-      'Accept': 'application/json, text/plain, */*',
-      'Accept-Language': 'zh-CN,zh;q=0.9'
-    };
-    
-    console.log('Content Script发送请求:', url);
-    
-    fetch(url, {
-      method: 'GET',
-      headers: headers,
-      credentials: 'same-origin'
-    })
-    .then(response => {
-      console.log('Content Script响应状态:', response.status);
-      console.log('Content Script响应URL:', response.url);
-      
-      // 检查响应是否是重定向到登录页面
-      if (response.url.includes('unifyAccountLogout.do')) {
-        return Promise.reject(new Error('需要登录'));
-      }
-      
-      // 尝试解析为JSON
-      return response.json();
-    })
-    .then(data => {
-      console.log('Content Script响应数据:', data);
-      
-      // 检查是否包含data字段，且data是一个图片地址
-      if (data && data.data && (data.data.startsWith('http://') || data.data.startsWith('https://'))) {
-        const imageUrl = data.data;
-        console.log('设备截图URL:', imageUrl);
-        sendResponse({ success: true, imageUrl: imageUrl });
-      } else {
-        throw new Error(data.msg || '查询失败，未获取到图片地址');
-      }
-    })
-    .catch(err => {
-      console.error('Content Script请求失败:', err);
-      sendResponse({ success: false, error: err.message });
-    });
-    
+
+    vcpFetch(url)
+      .then(data => {
+        if (data && data.data && (data.data.startsWith('http://') || data.data.startsWith('https://'))) {
+          sendResponse({ success: true, imageUrl: data.data });
+        } else {
+          throw new Error(data.msg || '查询失败，未获取到图片地址');
+        }
+      })
+      .catch(err => {
+        console.error('getDeviceScreenShot失败:', err);
+        sendResponse({ success: false, error: err.message });
+      });
+
     return true;
   }
-  
+
   if (request.action === 'saveRegion') {
     const { cusRegionNames, cusRegionId, entUserId: requestEntUserId, isEdit } = request;
-    const url = isEdit ? 'https://vcp.21cn.com/vcpCamera/cusRegion/editCusRegion' : 'https://vcp.21cn.com/vcpCamera/cusRegion/addCusRegion';
-    
+    const url = isEdit
+      ? 'https://vcp.21cn.com/vcpCamera/cusRegion/editCusRegion'
+      : 'https://vcp.21cn.com/vcpCamera/cusRegion/addCusRegion';
+
     const params = new URLSearchParams();
     if (isEdit) {
       params.append('cusRegionId', cusRegionId);
@@ -814,97 +570,43 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
       params.append('cusRegionId', cusRegionId);
       params.append('entUserId', requestEntUserId || entUserId || '');
     }
-    
-    const headers = {
-      'Accept': 'application/json, text/plain, */*',
-      'Accept-Language': 'zh-CN,zh;q=0.9'
-    };
-    
-    console.log('Content Script发送请求:', url);
-    console.log('请求参数:', params.toString());
-    
-    fetch(`${url}?${params.toString()}`, {
-      method: 'GET',
-      headers: headers,
-      credentials: 'same-origin'
-    })
-    .then(response => {
-      console.log('Content Script响应状态:', response.status);
-      console.log('Content Script响应URL:', response.url);
-      
-      // 检查响应是否是重定向到登录页面
-      if (response.url.includes('unifyAccountLogout.do')) {
-        return Promise.reject(new Error('需要登录'));
-      }
-      
-      // 尝试解析为JSON
-      return response.json();
-    })
-    .then(result => {
-      console.log('Content Script响应:', result);
-      
-      if (result.code === 0 || result.code === 20000) {
-        sendResponse({ success: true, data: result });
-      } else {
-        sendResponse({ success: false, error: result.msg || '操作失败' });
-      }
-    })
-    .catch(err => {
-      console.error('Content Script请求失败:', err);
-      sendResponse({ success: false, error: err.message });
-    });
-    
+
+    vcpGet(url, params)
+      .then(result => {
+        if (result.code === 0 || result.code === 20000) {
+          sendResponse({ success: true, data: result });
+        } else {
+          sendResponse({ success: false, error: result.msg || '操作失败' });
+        }
+      })
+      .catch(err => {
+        console.error('saveRegion失败:', err);
+        sendResponse({ success: false, error: err.message });
+      });
+
     return true;
   }
-  
+
   if (request.action === 'deleteRegion') {
     const { cusRegionIds } = request;
-    const url = 'https://vcp.21cn.com/vcpCamera/cusRegion/delCusRegion';
-    
     const params = new URLSearchParams({
       cusRegionIds: cusRegionIds,
       entUserId: entUserId || ''
     });
-    
-    const headers = {
-      'Accept': 'application/json, text/plain, */*',
-      'Accept-Language': 'zh-CN,zh;q=0.9'
-    };
-    
-    console.log('Content Script发送请求:', url);
-    console.log('请求参数:', params.toString());
-    
-    fetch(`${url}?${params.toString()}`, {
-      method: 'GET',
-      headers: headers,
-      credentials: 'same-origin'
-    })
-    .then(response => {
-      console.log('Content Script响应状态:', response.status);
-      console.log('Content Script响应URL:', response.url);
-      
-      // 检查响应是否是重定向到登录页面
-      if (response.url.includes('unifyAccountLogout.do')) {
-        return Promise.reject(new Error('需要登录'));
-      }
-      
-      // 尝试解析为JSON
-      return response.json();
-    })
-    .then(result => {
-      console.log('Content Script响应:', result);
-      
-      if (result.code === 0 || result.code === 20000) {
-        sendResponse({ success: true, data: result });
-      } else {
-        sendResponse({ success: false, error: result.msg || '操作失败' });
-      }
-    })
-    .catch(err => {
-      console.error('Content Script请求失败:', err);
-      sendResponse({ success: false, error: err.message });
-    });
-    
+
+    vcpGet('https://vcp.21cn.com/vcpCamera/cusRegion/delCusRegion', params)
+      .then(result => {
+        if (result.code === 0 || result.code === 20000) {
+          sendResponse({ success: true, data: result });
+        } else {
+          sendResponse({ success: false, error: result.msg || '操作失败' });
+        }
+      })
+      .catch(err => {
+        console.error('deleteRegion失败:', err);
+        sendResponse({ success: false, error: err.message });
+      });
+
     return true;
   }
 });

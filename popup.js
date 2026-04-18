@@ -51,28 +51,125 @@ async function getVcpTab() {
   return null;
 }
 
-async function fetchData() {
-  console.log('开始获取Cookie...');
+const VCP_LOGIN_TIP = '请先登录 <a href="https://vcp.21cn.com/vcpCamera/web/index.html#/nopasslogin" target="_blank">天翼云眼视频监控平台</a>';
+
+async function ensureVcpTab(injectScript = true) {
   const tab = await getVcpTab();
-  
-  console.log('当前标签页:', tab);
-  console.log('当前URL:', tab ? tab.url : '未找到标签页');
-  
   if (!tab) {
-    showStatus('请先登录 <a href="https://vcp.21cn.com/vcpCamera/web/index.html#/nopasslogin" target="_blank">天翼云眼视频监控平台</a>', true);
-    console.log('页面URL不匹配');
+    showStatus(VCP_LOGIN_TIP, true);
+    return null;
+  }
+  if (injectScript) {
+    await chrome.scripting.executeScript({
+      target: { tabId: tab.id },
+      files: ['content.js']
+    });
+  }
+  return tab;
+}
+
+async function sendVcpMessage(action, data = {}, injectScript = true) {
+  const tab = await ensureVcpTab(injectScript);
+  if (!tab) return null;
+  return await chrome.tabs.sendMessage(tab.id, { action, ...data });
+}
+
+function validatePhoneAccount(userId, account) {
+  if (!userId || !account) {
+    showStatus('请确保已获取用户ID并输入账号', true);
+    return false;
+  }
+  if (!/^1[3-9]\d{9}$/.test(account)) {
+    showStatus('请输入11位手机号', true);
+    return false;
+  }
+  return true;
+}
+
+function renderUploadStatsHtml(result) {
+  return `
+    <div style="overflow-x: auto;">
+      <table class="data-table" style="margin-top: 8px; width: 100%; border-collapse: collapse; border-radius: 12px; overflow: hidden; box-shadow: 0 4px 16px rgba(0, 0, 0, 0.08); background: rgba(255, 255, 255, 0.8); backdrop-filter: blur(10px); border: 1px solid rgba(226, 232, 240, 0.5);">
+        <tr style="background: linear-gradient(135deg, rgba(248, 250, 252, 0.9) 0%, rgba(241, 245, 249, 0.9) 100%); border-bottom: 1px solid rgba(226, 232, 240, 0.5); backdrop-filter: blur(10px);">
+          <th style="padding: 12px 14px; text-align: left; border: 1px solid rgba(226, 232, 240, 0.5); font-weight: 700; font-size: 9px; color: #1e293b; letter-spacing: -0.2px; text-transform: uppercase;">总上传条数</th>
+          <th style="padding: 12px 14px; text-align: left; border: 1px solid rgba(226, 232, 240, 0.5); font-weight: 700; font-size: 9px; color: #1e293b; letter-spacing: -0.2px; text-transform: uppercase;">重复条数</th>
+          <th style="padding: 12px 14px; text-align: left; border: 1px solid rgba(226, 232, 240, 0.5); font-weight: 700; font-size: 9px; color: #1e293b; letter-spacing: -0.2px; text-transform: uppercase;">有效条数</th>
+        </tr>
+        <tr style="border-bottom: 1px solid rgba(226, 232, 240, 0.5); transition: all 0.2s ease; font-size: 10px;">
+          <td style="padding: 12px 14px; border: 1px solid rgba(226, 232, 240, 0.5); color: #475569; font-weight: 500;">${result.totalUpload}</td>
+          <td style="padding: 12px 14px; border: 1px solid rgba(226, 232, 240, 0.5); color: #c5221f; font-weight: 600;">${result.duplicateCount}</td>
+          <td style="padding: 12px 14px; border: 1px solid rgba(226, 232, 240, 0.5); color: #137333; font-weight: 600;">${result.validCount}</td>
+        </tr>
+      </table>
+    </div>
+  `;
+}
+
+function exportToCSV(filename, headers, rows) {
+  if (!rows || rows.length === 0) {
+    showStatus('没有可导出的数据', true);
     return;
   }
+  const csvContent = `${headers}\n${rows.join('\n')}`;
+  const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  const now = new Date();
+  const timestamp = now.toISOString().slice(0, 10).replace(/-/g, '') +
+    now.toTimeString().slice(0, 8).replace(/:/g, '');
+  a.download = `${filename}_${timestamp}.csv`;
+  document.body.appendChild(a);
+  a.click();
+  document.body.removeChild(a);
+  URL.revokeObjectURL(url);
+  showStatus('导出成功');
+}
+
+function setupDropZone(config) {
+  const { dropZoneId, fileInputId, processFn } = config;
+  const dropZone = document.getElementById(dropZoneId);
+  const fileInput = document.getElementById(fileInputId);
+  if (!dropZone || !fileInput) return;
+
+  dropZone.addEventListener('click', () => fileInput.click());
+  dropZone.addEventListener('dragover', (e) => {
+    e.preventDefault();
+    dropZone.style.borderColor = '#4285f4';
+    dropZone.style.backgroundColor = '#f0f7ff';
+  });
+  dropZone.addEventListener('dragleave', () => {
+    dropZone.style.borderColor = '#ddd';
+    dropZone.style.backgroundColor = '#f9f9f9';
+  });
+  dropZone.addEventListener('drop', async (e) => {
+    e.preventDefault();
+    dropZone.style.borderColor = '#ddd';
+    dropZone.style.backgroundColor = '#f9f9f9';
+    if (e.dataTransfer.files.length) {
+      const file = e.dataTransfer.files[0];
+      if (file.name.endsWith('.csv')) {
+        fileInput.files = e.dataTransfer.files;
+        await processFn(file);
+      } else {
+        showStatus('请上传CSV文件 (.csv)', true);
+      }
+    }
+  });
+  fileInput.addEventListener('change', async (e) => {
+    if (e.target.files.length) {
+      await processFn(e.target.files[0]);
+    }
+  });
+}
+
+async function fetchData() {
+  const tab = await ensureVcpTab(false);
+  if (!tab) return;
 
   try {
-    console.log('发送getCookies消息...');
     const response = await chrome.runtime.sendMessage({ action: 'getCookies' });
-    
-    console.log('收到cookie响应:', response);
-    
     const safeVillageCookie = response['safeVillageCookie'];
-    
-    console.log('safeVillageCookie:', safeVillageCookie);
     
     if (safeVillageCookie) {
       const cookieFormat = `COOKIE = "safeVillageCookie=${safeVillageCookie}"`;
@@ -80,7 +177,7 @@ async function fetchData() {
       showStatus('数据获取成功');
     } else {
       document.getElementById('cookieFormat').textContent = '(未找到 safeVillageCookie)';
-      showStatus('请先登录 <a href="https://vcp.21cn.com/vcpCamera/web/index.html#/nopasslogin" target="_blank">天翼云眼视频监控平台</a>', true);
+      showStatus(VCP_LOGIN_TIP, true);
     }
   } catch (err) {
     console.error('获取数据失败:', err);
@@ -89,106 +186,43 @@ async function fetchData() {
 }
 
 async function getUserRegionList(userId) {
-  console.log('开始获取用户区域列表...');
-  
   try {
-    const tab = await getVcpTab();
-    
-    console.log('当前标签页:', tab);
-    console.log('当前URL:', tab ? tab.url : '未找到标签页');
-    
-    if (!tab) {
-      showStatus('请先登录 <a href="https://vcp.21cn.com/vcpCamera/web/index.html#/nopasslogin" target="_blank">天翼云眼视频监控平台</a>', true);
-      console.log('页面URL不匹配');
-      return;
-    }
-    
-    console.log('发送getUserRegionList消息...');
-    const response = await chrome.tabs.sendMessage(tab.id, { 
-      action: 'getUserRegionList',
-      userId: userId
-    });
-    
-    console.log('收到getUserRegionList响应:', response);
+    const response = await sendVcpMessage('getUserRegionList', { userId });
+    if (!response) return;
     
     if (response.success) {
-      console.log('获取regionCode成功:', response.regionCode);
       showStatus('获取区域代码成功');
     } else {
       showStatus('获取区域代码失败: ' + response.error, true);
     }
   } catch (err) {
     console.error('获取区域代码失败:', err);
-    console.error('错误堆栈:', err.stack);
     showStatus('获取区域代码失败: ' + err.message, true);
   }
 }
 
 async function getCustomList() {
-  console.log('开始获取企业主列表...');
   const userId = currentUserId;
   const account = document.getElementById('enteraccount').value.trim();
   
-  console.log('userId:', userId);
-  console.log('account:', account);
-  
-  if (!userId || !account) {
-    showStatus('请确保已获取用户ID并输入账号', true);
-    console.log('参数不完整');
-    return;
-  }
-  
-  if (!/^1[3-9]\d{9}$/.test(account)) {
-    showStatus('请输入11位手机号', true);
-    console.log('手机号格式不正确');
-    return;
-  }
+  if (!validatePhoneAccount(userId, account)) return;
   
   clearRegionData();
   
   try {
-    const tab = await getVcpTab();
-    
-    console.log('当前标签页:', tab);
-    console.log('当前URL:', tab ? tab.url : '未找到标签页');
-    
-    if (!tab) {
-      showStatus('请先登录 <a href="https://vcp.21cn.com/vcpCamera/web/index.html#/nopasslogin" target="_blank">天翼云眼视频监控平台</a>', true);
-      console.log('页面URL不匹配');
-      return;
-    }
-    
-    console.log('注入content script...');
-    await chrome.scripting.executeScript({
-      target: { tabId: tab.id },
-      files: ['content.js']
-    });
-    
-    console.log('发送getCustomList消息...');
-    const response = await chrome.tabs.sendMessage(tab.id, { 
-      action: 'getCustomList', 
-      userId: userId,
-      account: account
-    });
-    
-    console.log('收到getCustomList响应:', response);
+    const response = await sendVcpMessage('getCustomList', { userId, account });
+    if (!response) return;
     
     if (response.success) {
       const customData = response.data;
-      
-      console.log('customData:', customData);
       
       if (customData && customData.data && customData.data.list) {
         const list = customData.data.list;
         const qiyezhuList = list.filter(item => item.roleName === '企业主');
         
-        console.log('筛选后的企业主列表:', qiyezhuList);
-        
         if (qiyezhuList.length > 0) {
           showStatus('该账户是企业主，正在获取监控目录...');
-          
           await getUserRegionList(qiyezhuList[0].id);
-          
           await getLevelCusRegion();
         } else {
           document.getElementById('customListResult').style.display = 'block';
@@ -205,7 +239,6 @@ async function getCustomList() {
     }
   } catch (err) {
     console.error('获取客户列表失败:', err);
-    console.error('错误堆栈:', err.stack);
     showStatus('获取客户列表失败: ' + err.message, true);
   }
 }
@@ -218,39 +251,17 @@ function clearRegionData() {
 }
 
 async function getLevelCusRegion() {
-  console.log('开始获取监控目录...');
-  
   clearRegionData();
   
   try {
-    const tab = await getVcpTab();
-    
-    console.log('当前标签页:', tab);
-    console.log('当前URL:', tab ? tab.url : '未找到标签页');
-    
-    if (!tab) {
-      showStatus('请先登录 <a href="https://vcp.21cn.com/vcpCamera/web/index.html#/nopasslogin" target="_blank">天翼云眼视频监控平台</a>', true);
-      console.log('页面URL不匹配');
-      return;
-    }
-    
-    console.log('发送getLevelCusRegion消息...');
-    const response = await chrome.tabs.sendMessage(tab.id, { 
-      action: 'getLevelCusRegion'
-    });
-    
-    console.log('收到getLevelCusRegion响应:', response);
+    const response = await sendVcpMessage('getLevelCusRegion');
+    if (!response) return;
     
     if (response.success) {
       const regionData = response.data;
       
-      console.log('regionData:', regionData);
-      
       if (regionData && regionData.data && regionData.data.cusRegionList) {
         const regionList = regionData.data.cusRegionList;
-        
-        console.log('监控目录列表:', regionList);
-        
         const regionHtml = renderRegionTree(regionList);
         
         document.getElementById('levelCusRegionResult').style.display = 'block';
@@ -268,7 +279,6 @@ async function getLevelCusRegion() {
     }
   } catch (err) {
     console.error('获取监控目录失败:', err);
-    console.error('错误堆栈:', err.stack);
     showStatus('获取监控目录失败: ' + err.message, true);
   }
 }
@@ -322,9 +332,7 @@ function addRegionClickHandlers() {
       e.stopPropagation();
       
       const regionId = item.getAttribute('data-id');
-      const regionName = item.getAttribute('data-name');
       
-      console.log('点击展开/折叠:', { regionId, regionName, hasChild });
       
       const childrenContainer = item.nextElementSibling;
       
@@ -340,15 +348,8 @@ function addRegionClickHandlers() {
         toggle.textContent = '⏳';
         
         try {
-          const tab = await getVcpTab();
-          if (!tab) {
-            showStatus('请先打开 vcp.21cn.com 页面', true);
-            return;
-          }
-          const response = await chrome.tabs.sendMessage(tab.id, { 
-            action: 'getLevelCusRegion',
-            cusRegionId: regionId
-          });
+          const response = await sendVcpMessage('getLevelCusRegion', { cusRegionId: regionId }, false);
+          if (!response) { toggle.textContent = '▶'; return; }
           
           if (response.success && response.data && response.data.data && response.data.data.cusRegionList) {
             const childHtml = renderRegionTree(response.data.data.cusRegionList, parseInt(item.style.paddingLeft || 0) / 20 + 1);
@@ -377,20 +378,12 @@ function addRegionClickHandlers() {
       const regionId = radio.getAttribute('data-id');
       const regionName = radio.getAttribute('data-name');
       
-      console.log('选中目录:', { regionId, regionName });
-      
       (async () => {
-        const tab = await getVcpTab();
-        if (tab) {
-          chrome.tabs.sendMessage(tab.id, { 
-            action: 'setSelectedRegion',
-            regionId: regionId,
-            regionName: regionName
-          });
-        }
+        await sendVcpMessage('setSelectedRegion', {
+          regionId: regionId,
+          regionName: regionName
+        }, false);
       })();
-      
-      // 不显示选中的目录信息
     });
     
     const addSubregionBtn = item.querySelector('.add-subregion-btn');
@@ -400,31 +393,19 @@ function addRegionClickHandlers() {
         e.stopPropagation();
         const parentId = addSubregionBtn.getAttribute('data-id');
         
-        console.log('点击添加子目录:', { parentId });
-        
         const subregionName = prompt('请输入子目录名称:');
         if (subregionName && subregionName.trim()) {
           try {
-            const tab = await getVcpTab();
-            if (!tab) {
-              showStatus('请先登录 <a href="https://vcp.21cn.com/vcpCamera/web/index.html#/nopasslogin" target="_blank">天翼云眼视频监控平台</a>', true);
-              return;
-            }
-            
-            console.log('发送saveRegion消息...');
-            const response = await chrome.tabs.sendMessage(tab.id, { 
-              action: 'saveRegion',
+            const response = await sendVcpMessage('saveRegion', {
               cusRegionNames: subregionName.trim(),
               cusRegionId: parentId,
-              entUserId: '', // 默认值，实际应该从企业主信息获取
+              entUserId: '',
               isEdit: false
-            });
-            
-            console.log('收到saveRegion响应:', response);
+            }, false);
+            if (!response) return;
             
             if (response.success) {
               showStatus('子目录添加成功');
-              // 重新获取监控目录
               await getLevelCusRegionForRegionAdjust();
             } else {
               showStatus('子目录添加失败: ' + response.error, true);
@@ -443,31 +424,19 @@ function addRegionClickHandlers() {
         const regionId = editBtn.getAttribute('data-id');
         const regionName = editBtn.getAttribute('data-name');
         
-        console.log('点击编辑目录:', { regionId, regionName });
-        
         const newName = prompt('请输入新的目录名称:', regionName);
         if (newName && newName.trim() && newName !== regionName) {
           try {
-            const tab = await getVcpTab();
-            if (!tab) {
-              showStatus('请先登录 <a href="https://vcp.21cn.com/vcpCamera/web/index.html#/nopasslogin" target="_blank">天翼云眼视频监控平台</a>', true);
-              return;
-            }
-            
-            console.log('发送saveRegion消息...');
-            const response = await chrome.tabs.sendMessage(tab.id, { 
-              action: 'saveRegion',
+            const response = await sendVcpMessage('saveRegion', {
               cusRegionNames: newName.trim(),
               cusRegionId: regionId,
-              entUserId: '', // 默认值，实际应该从企业主信息获取
+              entUserId: '',
               isEdit: true
-            });
-            
-            console.log('收到saveRegion响应:', response);
+            }, false);
+            if (!response) return;
             
             if (response.success) {
               showStatus('目录编辑成功');
-              // 重新获取监控目录
               await getLevelCusRegionForRegionAdjust();
             } else {
               showStatus('目录编辑失败: ' + response.error, true);
@@ -485,27 +454,15 @@ function addRegionClickHandlers() {
         e.stopPropagation();
         const regionId = deleteBtn.getAttribute('data-id');
         
-        console.log('点击删除目录:', { regionId });
-        
         if (confirm('确定要删除该目录吗？')) {
           try {
-            const tab = await getVcpTab();
-            if (!tab) {
-              showStatus('请先登录 <a href="https://vcp.21cn.com/vcpCamera/web/index.html#/nopasslogin" target="_blank">天翼云眼视频监控平台</a>', true);
-              return;
-            }
-            
-            console.log('发送deleteRegion消息...');
-            const response = await chrome.tabs.sendMessage(tab.id, { 
-              action: 'deleteRegion',
+            const response = await sendVcpMessage('deleteRegion', {
               cusRegionIds: regionId
-            });
-            
-            console.log('收到deleteRegion响应:', response);
+            }, false);
+            if (!response) return;
             
             if (response.success) {
               showStatus('目录删除成功');
-              // 重新获取监控目录
               await getLevelCusRegionForRegionAdjust();
             } else {
               showStatus('目录删除失败: ' + response.error, true);
@@ -546,10 +503,6 @@ async function readCSVFile(file) {
         const duplicateCount = totalUpload - uniqueCodes.length;
         const validCount = uniqueCodes.length;
         
-        console.log('=== CSV文件上传统计 ===');
-        console.log('总上传条数:', totalUpload);
-        console.log('重复条数:', duplicateCount);
-        console.log('有效条数:', validCount);
         
         resolve({
           deviceCodes: uniqueCodes,
@@ -570,63 +523,29 @@ async function readCSVFile(file) {
   });
 }
 
-async function processCSVFile(file) {
+async function processCSVFileCommon(file, config) {
+  const { deviceCodesId, dropZoneId, uploadStatsId, uploadStatsContentId, excelFileId, reuploadBtnId } = config;
   try {
     const result = await readCSVFile(file);
-    console.log('CSV文件处理完成:', result);
     
-    // 保存背景条引用
-    const deviceCodesGroup = document.getElementById('deviceCodes').closest('.input-group');
-    const uploadFileGroup = document.getElementById('dropZone').closest('.input-group');
+    const deviceCodesGroup = document.getElementById(deviceCodesId).closest('.input-group');
+    const uploadFileGroup = document.getElementById(dropZoneId).closest('.input-group');
     
-    // 显示上传统计信息
-    const uploadStatsHtml = `
-      <div style="overflow-x: auto;">
-        <table class="data-table" style="margin-top: 8px; width: 100%; border-collapse: collapse; border-radius: 12px; overflow: hidden; box-shadow: 0 4px 16px rgba(0, 0, 0, 0.08); background: rgba(255, 255, 255, 0.8); backdrop-filter: blur(10px); border: 1px solid rgba(226, 232, 240, 0.5);">
-          <tr style="background: linear-gradient(135deg, rgba(248, 250, 252, 0.9) 0%, rgba(241, 245, 249, 0.9) 100%); border-bottom: 1px solid rgba(226, 232, 240, 0.5); backdrop-filter: blur(10px);">
-            <th style="padding: 12px 14px; text-align: left; border: 1px solid rgba(226, 232, 240, 0.5); font-weight: 700; font-size: 9px; color: #1e293b; letter-spacing: -0.2px; text-transform: uppercase;">总上传条数</th>
-            <th style="padding: 12px 14px; text-align: left; border: 1px solid rgba(226, 232, 240, 0.5); font-weight: 700; font-size: 9px; color: #1e293b; letter-spacing: -0.2px; text-transform: uppercase;">重复条数</th>
-            <th style="padding: 12px 14px; text-align: left; border: 1px solid rgba(226, 232, 240, 0.5); font-weight: 700; font-size: 9px; color: #1e293b; letter-spacing: -0.2px; text-transform: uppercase;">有效条数</th>
-          </tr>
-          <tr style="border-bottom: 1px solid rgba(226, 232, 240, 0.5); transition: all 0.2s ease; font-size: 10px;">
-            <td style="padding: 12px 14px; border: 1px solid rgba(226, 232, 240, 0.5); color: #475569; font-weight: 500;">${result.totalUpload}</td>
-            <td style="padding: 12px 14px; border: 1px solid rgba(226, 232, 240, 0.5); color: #c5221f; font-weight: 600;">${result.duplicateCount}</td>
-            <td style="padding: 12px 14px; border: 1px solid rgba(226, 232, 240, 0.5); color: #137333; font-weight: 600;">${result.validCount}</td>
-          </tr>
-        </table>
-      </div>
-      <button id="reuploadBtn" style="margin-top: 12px; width: 100%; background: linear-gradient(135deg, #3b82f6 0%, #60a5fa 100%); color: white; border: none; padding: 10px; border-radius: 10px; cursor: pointer; font-size: 11px; font-weight: 700; box-shadow: 0 4px 12px rgba(59, 130, 246, 0.25); letter-spacing: -0.2px; backdrop-filter: blur(10px); border: 1px solid rgba(255, 255, 255, 0.3); transition: all 0.25s ease;">🔄 重新上传</button>
-    `;
+    const reuploadBtnStyle = 'margin-top: 12px; width: 100%; background: linear-gradient(135deg, #3b82f6 0%, #60a5fa 100%); color: white; border: none; padding: 10px; border-radius: 10px; cursor: pointer; font-size: 11px; font-weight: 700; box-shadow: 0 4px 12px rgba(59, 130, 246, 0.25); letter-spacing: -0.2px; backdrop-filter: blur(10px); border: 1px solid rgba(255, 255, 255, 0.3); transition: all 0.25s ease;';
+    const uploadStatsHtml = renderUploadStatsHtml(result) +
+      `<button id="${reuploadBtnId}" style="${reuploadBtnStyle}">🔄 重新上传</button>`;
     
-    document.getElementById('uploadStats').style.display = 'block';
-    document.getElementById('uploadStatsContent').innerHTML = uploadStatsHtml;
+    document.getElementById(uploadStatsId).style.display = 'block';
+    document.getElementById(uploadStatsContentId).innerHTML = uploadStatsHtml;
     
-    // 隐藏输入和上传文件的控件及其标签和背景条
-    if (deviceCodesGroup) {
-      deviceCodesGroup.style.display = 'none';
-    }
+    if (deviceCodesGroup) deviceCodesGroup.style.display = 'none';
+    if (uploadFileGroup) uploadFileGroup.style.display = 'none';
     
-    if (uploadFileGroup) {
-      uploadFileGroup.style.display = 'none';
-    }
-    
-    // 添加重新上传按钮的事件监听
-    document.getElementById('reuploadBtn').addEventListener('click', () => {
-      // 显示输入和上传文件的控件
-      if (deviceCodesGroup) {
-        deviceCodesGroup.style.display = 'block';
-      }
-      
-      if (uploadFileGroup) {
-        uploadFileGroup.style.display = 'block';
-      }
-      
-      // 隐藏上传统计信息
-      document.getElementById('uploadStats').style.display = 'none';
-      
-      // 清空文件输入
-      document.getElementById('excelFile').value = '';
-      
+    document.getElementById(reuploadBtnId).addEventListener('click', () => {
+      if (deviceCodesGroup) deviceCodesGroup.style.display = 'block';
+      if (uploadFileGroup) uploadFileGroup.style.display = 'block';
+      document.getElementById(uploadStatsId).style.display = 'none';
+      document.getElementById(excelFileId).value = '';
       showStatus('可以重新上传文件');
     });
     
@@ -637,59 +556,36 @@ async function processCSVFile(file) {
   }
 }
 
+async function processCSVFile(file) {
+  await processCSVFileCommon(file, {
+    deviceCodesId: 'deviceCodes',
+    dropZoneId: 'dropZone',
+    uploadStatsId: 'uploadStats',
+    uploadStatsContentId: 'uploadStatsContent',
+    excelFileId: 'excelFile',
+    reuploadBtnId: 'reuploadBtn'
+  });
+}
+
 async function createCascadeTask() {
-  console.log('开始创建级联任务...');
-  
   const userId = currentUserId;
   const account = document.getElementById('enteraccount').value.trim();
   
-  console.log('userId:', userId);
-  console.log('account:', account);
-  
-  if (!userId || !account) {
-    showStatus('请确保已获取用户ID并输入账号', true);
-    console.log('userId或account为空');
-    return;
-  }
-  
-  if (!/^1[3-9]\d{9}$/.test(account)) {
-    showStatus('请输入11位手机号', true);
-    console.log('手机号格式不正确:', account);
-    return;
-  }
+  if (!validatePhoneAccount(userId, account)) return;
   
   try {
-    const tab = await getVcpTab();
+    const tab = await ensureVcpTab();
+    if (!tab) return;
     
-    console.log('当前标签页:', tab);
-    console.log('当前URL:', tab ? tab.url : '未找到标签页');
-    
-    if (!tab) {
-      showStatus('请先登录 <a href="https://vcp.21cn.com/vcpCamera/web/index.html#/nopasslogin" target="_blank">天翼云眼视频监控平台</a>', true);
-      console.log('页面URL不匹配');
-      return;
-    }
-    
-    console.log('注入content script...');
-    await chrome.scripting.executeScript({
-      target: { tabId: tab.id },
-      files: ['content.js']
-    });
-    
-    // 自动获取设备信息
-    console.log('自动获取设备信息...');
     const deviceCodesInput = document.getElementById('deviceCodes').value.trim();
     const excelFile = document.getElementById('excelFile').files[0];
     
     let deviceCodeArray = [];
     
     if (excelFile) {
-      console.log('使用已上传的CSV文件');
-      
       try {
         const result = await readCSVFile(excelFile);
         deviceCodeArray = result.deviceCodes;
-        console.log('从CSV读取的设备编码:', deviceCodeArray);
         showStatus(`使用已上传的CSV文件 - 有效: ${result.validCount}条`);
       } catch (err) {
         console.error('读取CSV文件失败:', err);
@@ -698,9 +594,6 @@ async function createCascadeTask() {
       }
     } else if (deviceCodesInput) {
       deviceCodeArray = deviceCodesInput.split(/\n|\r\n/).map(code => code.trim()).filter(code => code);
-      console.log('手动输入的设备编码:', deviceCodeArray);
-      
-      // 隐藏上传文件的控件及其标签
       document.getElementById('uploadFileLabel').style.display = 'none';
       document.getElementById('dropZone').style.display = 'none';
       document.getElementById('downloadTemplate').style.display = 'none';
@@ -737,13 +630,11 @@ async function createCascadeTask() {
     
     chrome.runtime.onMessage.addListener(progressUpdateListener);
     
-    console.log('发送getRegionsByDevTreeType消息...');
     const deviceResponse = await chrome.tabs.sendMessage(tab.id, {
       action: 'getRegionsByDevTreeType',
       deviceCodes: deviceCodeArray
     });
     
-    console.log('收到getRegionsByDevTreeType响应:', deviceResponse);
     
     if (!deviceResponse.success) {
       showStatus('获取设备信息失败: ' + deviceResponse.error, true);
@@ -762,10 +653,6 @@ async function createCascadeTask() {
     const successfulDeviceCodes = new Set(deviceList.map(device => device.deviceCode));
     const failedDeviceCodes = deviceCodeArray.filter(code => !successfulDeviceCodes.has(code));
     
-    console.log('获取成功的设备列表:', deviceList);
-    console.log('deviceList详细信息:', JSON.stringify(deviceList, null, 2));
-    console.log('获取失败的设备编码:', failedDeviceCodes);
-    console.log('获取失败的设备数量:', failedDeviceCodes.length);
     
     if (deviceList.length === 0) {
       showStatus('所有设备获取失败，请检查设备编码', true);
@@ -792,7 +679,6 @@ async function createCascadeTask() {
       return;
     }
     
-    console.log('发送createCascadeTask消息...');
     const response = await chrome.tabs.sendMessage(tab.id, {
       action: 'createCascadeTask',
       userId: userId,
@@ -800,14 +686,11 @@ async function createCascadeTask() {
       deviceList: deviceList
     });
     
-    console.log('收到createCascadeTask响应:', response);
     
     // 无论成功失败，都处理级联结果
     const resultData = response.data;
     const cascadeResults = response.cascadeResults || [];
     
-    console.log('级联任务结果:', resultData);
-    console.log('级联详细结果:', cascadeResults);
     
     // 分类成功和失败的设备
     let successDevices = cascadeResults.filter(item => item.success);
@@ -828,8 +711,6 @@ async function createCascadeTask() {
       successDevices = defaultResults.filter(item => item.success);
       failedDevices = defaultResults.filter(item => !item.success);
       
-      console.log('生成默认结果 - 成功设备:', successDevices.length);
-      console.log('生成默认结果 - 失败设备:', failedDevices.length);
     }
     
     // 添加获取设备信息失败的设备到结果中
@@ -854,11 +735,6 @@ async function createCascadeTask() {
     const successCount = successDevices.length;
     const failedCount = failedDevices.length;
     
-    console.log('显示级联结果...');
-    console.log('总数:', totalCount);
-    console.log('成功数:', successCount);
-    console.log('失败数:', failedCount);
-    console.log('获取设备信息失败的设备数:', deviceInfoFailedDevices.length);
     
     // 显示状态信息
     if (successCount === totalCount) {
@@ -925,7 +801,6 @@ async function createCascadeTask() {
     chrome.runtime.onMessage.removeListener(progressUpdateListener);
   } catch (err) {
     console.error('创建级联任务失败:', err);
-    console.error('错误堆栈:', err.stack);
     showStatus('创建级联任务失败: ' + err.message, true);
     // 隐藏进度条
     const progressContainer = document.getElementById('progressContainer');
@@ -992,26 +867,16 @@ document.getElementById('addRootRegionBtn').addEventListener('click', async func
   }
   
   try {
-    const tab = await getVcpTab();
-    if (!tab) {
-      showStatus('请先登录 <a href="https://vcp.21cn.com/vcpCamera/web/index.html#/nopasslogin" target="_blank">天翼云眼视频监控平台</a>', true);
-      return;
-    }
-    
-    // 通过content.js发送请求
-    const response = await chrome.tabs.sendMessage(tab.id, {
-      action: 'saveRegion',
+    const response = await sendVcpMessage('saveRegion', {
       cusRegionNames: cusRegionNames.trim(),
-      cusRegionId: '', // 根目录的父ID为空
+      cusRegionId: '',
       entUserId: entUserId,
       isEdit: false
     });
-    
-    console.log('添加根目录响应:', response);
+    if (!response) return;
     
     if (response.success) {
       showStatus('添加根目录成功', false);
-      // 重新查询监控目录
       document.getElementById('queryRegionAdjustBtn').click();
     } else {
       showStatus('添加根目录失败: ' + response.error, true);
@@ -1025,7 +890,6 @@ document.getElementById('addRootRegionBtn').addEventListener('click', async func
 // 停止查询按钮
 if (document.getElementById('stopQueryBtn')) {
   document.getElementById('stopQueryBtn').addEventListener('click', function() {
-    console.log('用户点击了停止查询按钮');
     shouldStopQuery = true;
     showStatus('正在停止查询...', false);
     updateProgress(0, '正在停止查询...');
@@ -1033,60 +897,16 @@ if (document.getElementById('stopQueryBtn')) {
 }
 
 // 拖放上传功能
-const dropZone = document.getElementById('dropZone');
-const excelFileInput = document.getElementById('excelFile');
-
-// 点击选择文件
-dropZone.addEventListener('click', () => {
-  excelFileInput.click();
-});
-
-// 拖放事件
-dropZone.addEventListener('dragover', (e) => {
-  e.preventDefault();
-  dropZone.style.borderColor = '#4285f4';
-  dropZone.style.backgroundColor = '#f0f7ff';
-});
-
-dropZone.addEventListener('dragleave', () => {
-  dropZone.style.borderColor = '#ddd';
-  dropZone.style.backgroundColor = '#f9f9f9';
-});
-
-dropZone.addEventListener('drop', async (e) => {
-  e.preventDefault();
-  dropZone.style.borderColor = '#ddd';
-  dropZone.style.backgroundColor = '#f9f9f9';
-  
-  if (e.dataTransfer.files.length) {
-    const file = e.dataTransfer.files[0];
-    if (file.name.endsWith('.csv')) {
-      excelFileInput.files = e.dataTransfer.files;
-      console.log('文件已拖放:', file.name);
-      // 立即读取文件并显示统计信息
-      await processCSVFile(file);
-    } else {
-      showStatus('请上传CSV文件 (.csv)', true);
-    }
-  }
-});
-
-// 文件选择事件
-excelFileInput.addEventListener('change', async (e) => {
-  if (e.target.files.length) {
-    const file = e.target.files[0];
-    console.log('文件已选择:', file.name);
-    // 立即读取文件并显示统计信息
-    await processCSVFile(file);
-  }
+setupDropZone({
+  dropZoneId: 'dropZone',
+  fileInputId: 'excelFile',
+  processFn: processCSVFile
 });
 
 // 下载模板
 const downloadTemplateBtn = document.getElementById('downloadTemplate');
 if (downloadTemplateBtn) {
-  console.log('找到downloadTemplate元素');
   downloadTemplateBtn.addEventListener('click', (e) => {
-    console.log('点击下载模板');
     e.preventDefault();
     try {
       downloadCSVTemplate();
@@ -1095,77 +915,26 @@ if (downloadTemplateBtn) {
       showStatus('下载模板失败: ' + err.message, true);
     }
   });
-} else {
-  console.error('未找到downloadTemplate元素');
 }
 
 // 批量设备查询页面的拖放上传功能
-const dropZoneQuery = document.getElementById('dropZoneQuery');
-const excelFileInputQuery = document.getElementById('excelFileQuery');
+setupDropZone({
+  dropZoneId: 'dropZoneQuery',
+  fileInputId: 'excelFileQuery',
+  processFn: processCSVFileQuery
+});
 
-if (dropZoneQuery && excelFileInputQuery) {
-  // 点击选择文件
-  dropZoneQuery.addEventListener('click', () => {
-    excelFileInputQuery.click();
-  });
-
-  // 拖放事件
-  dropZoneQuery.addEventListener('dragover', (e) => {
+const downloadTemplateBtnQuery = document.getElementById('downloadTemplateQuery');
+if (downloadTemplateBtnQuery) {
+  downloadTemplateBtnQuery.addEventListener('click', (e) => {
     e.preventDefault();
-    dropZoneQuery.style.borderColor = '#4285f4';
-    dropZoneQuery.style.backgroundColor = '#f0f7ff';
-  });
-
-  dropZoneQuery.addEventListener('dragleave', () => {
-    dropZoneQuery.style.borderColor = '#ddd';
-    dropZoneQuery.style.backgroundColor = '#f9f9f9';
-  });
-
-  dropZoneQuery.addEventListener('drop', async (e) => {
-    e.preventDefault();
-    dropZoneQuery.style.borderColor = '#ddd';
-    dropZoneQuery.style.backgroundColor = '#f9f9f9';
-    
-    if (e.dataTransfer.files.length) {
-      const file = e.dataTransfer.files[0];
-      if (file.name.endsWith('.csv')) {
-        excelFileInputQuery.files = e.dataTransfer.files;
-        console.log('文件已拖放:', file.name);
-        // 立即读取文件并显示统计信息
-        await processCSVFileQuery(file);
-      } else {
-        showStatus('请上传CSV文件 (.csv)', true);
-      }
+    try {
+      downloadCSVTemplate();
+    } catch (err) {
+      console.error('下载模板失败:', err);
+      showStatus('下载模板失败: ' + err.message, true);
     }
   });
-
-  // 文件选择事件
-  excelFileInputQuery.addEventListener('change', async (e) => {
-    if (e.target.files.length) {
-      const file = e.target.files[0];
-      console.log('文件已选择:', file.name);
-      // 立即读取文件并显示统计信息
-      await processCSVFileQuery(file);
-    }
-  });
-
-  // 下载模板
-  const downloadTemplateBtnQuery = document.getElementById('downloadTemplateQuery');
-  if (downloadTemplateBtnQuery) {
-    console.log('找到downloadTemplateQuery元素');
-    downloadTemplateBtnQuery.addEventListener('click', (e) => {
-      console.log('点击下载模板');
-      e.preventDefault();
-      try {
-        downloadCSVTemplate();
-      } catch (err) {
-        console.error('下载模板失败:', err);
-        showStatus('下载模板失败: ' + err.message, true);
-      }
-    });
-  } else {
-    console.error('未找到downloadTemplateQuery元素');
-  }
 }
 
 function downloadCSVTemplate() {
@@ -1190,141 +959,41 @@ function downloadCSVTemplate() {
 }
 
 function exportCascadeResult(allDevices) {
-  if (!allDevices || allDevices.length === 0) {
-    showStatus('没有可导出的数据', true);
-    return;
-  }
-  
-  // 创建CSV格式的导出数据
-  const csvContent = `序号,设备UID,设备名字,级联状态,状态信息
-${allDevices.map((item, index) => 
-  `${index + 1},${item.deviceCode || '-'},${item.deviceName || '-'},${item.success ? '成功' : '失败'},"${item.message || (item.success ? '级联成功' : '级联失败')}"`
-).join('\n')}`;
-  
-  // 创建Blob并下载
-  const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
-  const url = URL.createObjectURL(blob);
-  const a = document.createElement('a');
-  a.href = url;
-  
-  // 生成带时间戳的文件名
-  const now = new Date();
-  const timestamp = now.toISOString().slice(0, 10).replace(/-/g, '') + 
-                   now.toTimeString().slice(0, 8).replace(/:/g, '');
-  a.download = `级联结果_${timestamp}.csv`;
-  
-  document.body.appendChild(a);
-  a.click();
-  document.body.removeChild(a);
-  URL.revokeObjectURL(url);
-  
-  showStatus('级联清单导出成功');
+  const headers = '序号,设备UID,设备名字,级联状态,状态信息';
+  const rows = (allDevices || []).map((item, index) =>
+    `${index + 1},${item.deviceCode || '-'},${item.deviceName || '-'},${item.success ? '成功' : '失败'},"${item.message || (item.success ? '级联成功' : '级联失败')}"`
+  );
+  exportToCSV('级联结果', headers, rows);
 }
 
 // 批量设备查询相关函数
 async function processCSVFileQuery(file) {
-  try {
-    const result = await readCSVFile(file);
-    console.log('CSV文件处理完成:', result);
-    
-    // 保存背景条引用
-    const deviceCodesGroup = document.getElementById('deviceCodesQuery').closest('.input-group');
-    const uploadFileGroup = document.getElementById('dropZoneQuery').closest('.input-group');
-    
-    // 显示上传统计信息
-    const uploadStatsHtml = `
-      <div style="overflow-x: auto;">
-        <table class="data-table" style="margin-top: 8px; width: 100%; border-collapse: collapse; border-radius: 12px; overflow: hidden; box-shadow: 0 4px 16px rgba(0, 0, 0, 0.08); background: rgba(255, 255, 255, 0.8); backdrop-filter: blur(10px); border: 1px solid rgba(226, 232, 240, 0.5);">
-          <tr style="background: linear-gradient(135deg, rgba(248, 250, 252, 0.9) 0%, rgba(241, 245, 249, 0.9) 100%); border-bottom: 1px solid rgba(226, 232, 240, 0.5); backdrop-filter: blur(10px);">
-            <th style="padding: 12px 14px; text-align: left; border: 1px solid rgba(226, 232, 240, 0.5); font-weight: 700; font-size: 9px; color: #1e293b; letter-spacing: -0.2px; text-transform: uppercase;">总上传条数</th>
-            <th style="padding: 12px 14px; text-align: left; border: 1px solid rgba(226, 232, 240, 0.5); font-weight: 700; font-size: 9px; color: #1e293b; letter-spacing: -0.2px; text-transform: uppercase;">重复条数</th>
-            <th style="padding: 12px 14px; text-align: left; border: 1px solid rgba(226, 232, 240, 0.5); font-weight: 700; font-size: 9px; color: #1e293b; letter-spacing: -0.2px; text-transform: uppercase;">有效条数</th>
-          </tr>
-          <tr style="border-bottom: 1px solid rgba(226, 232, 240, 0.5); transition: all 0.2s ease; font-size: 10px;">
-            <td style="padding: 12px 14px; border: 1px solid rgba(226, 232, 240, 0.5); color: #475569; font-weight: 500;">${result.totalUpload}</td>
-            <td style="padding: 12px 14px; border: 1px solid rgba(226, 232, 240, 0.5); color: #c5221f; font-weight: 600;">${result.duplicateCount}</td>
-            <td style="padding: 12px 14px; border: 1px solid rgba(226, 232, 240, 0.5); color: #137333; font-weight: 600;">${result.validCount}</td>
-          </tr>
-        </table>
-      </div>
-      <button id="reuploadBtnQuery" style="margin-top: 12px; width: 100%; background: linear-gradient(135deg, #3b82f6 0%, #60a5fa 100%); color: white; border: none; padding: 10px; border-radius: 10px; cursor: pointer; font-size: 11px; font-weight: 700; box-shadow: 0 4px 12px rgba(59, 130, 246, 0.25); letter-spacing: -0.2px; backdrop-filter: blur(10px); border: 1px solid rgba(255, 255, 255, 0.3); transition: all 0.25s ease;">🔄 重新上传</button>
-    `;
-    
-    document.getElementById('uploadStatsQuery').style.display = 'block';
-    document.getElementById('uploadStatsContentQuery').innerHTML = uploadStatsHtml;
-    
-    // 隐藏输入和上传文件的控件及其标签和背景条
-    if (deviceCodesGroup) {
-      deviceCodesGroup.style.display = 'none';
-    }
-    
-    if (uploadFileGroup) {
-      uploadFileGroup.style.display = 'none';
-    }
-    
-    // 添加重新上传按钮的事件监听
-    document.getElementById('reuploadBtnQuery').addEventListener('click', () => {
-      // 显示输入和上传文件的控件
-      if (deviceCodesGroup) {
-        deviceCodesGroup.style.display = 'block';
-      }
-      
-      if (uploadFileGroup) {
-        uploadFileGroup.style.display = 'block';
-      }
-      
-      // 隐藏上传统计信息
-      document.getElementById('uploadStatsQuery').style.display = 'none';
-      
-      // 清空文件输入
-      document.getElementById('excelFileQuery').value = '';
-      
-      showStatus('可以重新上传文件');
-    });
-    
-    showStatus(`CSV文件读取成功 - 总上传: ${result.totalUpload}条, 重复: ${result.duplicateCount}条, 有效: ${result.validCount}条`);
-  } catch (err) {
-    console.error('处理CSV文件失败:', err);
-    showStatus('处理CSV文件失败: ' + err.message, true);
-  }
+  await processCSVFileCommon(file, {
+    deviceCodesId: 'deviceCodesQuery',
+    dropZoneId: 'dropZoneQuery',
+    uploadStatsId: 'uploadStatsQuery',
+    uploadStatsContentId: 'uploadStatsContentQuery',
+    excelFileId: 'excelFileQuery',
+    reuploadBtnId: 'reuploadBtnQuery'
+  });
 }
 
 let deviceStatusQueryAbortController = null;
 
 async function queryDeviceStatus() {
-  console.log('开始查询设备在线状态...');
-  
   try {
-    const tab = await getVcpTab();
+    const tab = await ensureVcpTab();
+    if (!tab) return;
     
-    console.log('当前标签页:', tab);
-    console.log('当前URL:', tab ? tab.url : '未找到标签页');
-    
-    if (!tab) {
-      showStatus('请先登录 <a href="https://vcp.21cn.com/vcpCamera/web/index.html#/nopasslogin" target="_blank">天翼云眼视频监控平台</a>', true);
-      console.log('页面URL不匹配');
-      return;
-    }
-    
-    console.log('注入content script...');
-    await chrome.scripting.executeScript({
-      target: { tabId: tab.id },
-      files: ['content.js']
-    });
-    
-    // 获取设备编码
     const deviceCodesInput = document.getElementById('deviceCodesQuery').value.trim();
     const excelFile = document.getElementById('excelFileQuery').files[0];
     
     let deviceCodeArray = [];
     
     if (excelFile) {
-      console.log('使用已上传的CSV文件');
-      
       try {
         const result = await readCSVFile(excelFile);
         deviceCodeArray = result.deviceCodes;
-        console.log('从CSV读取的设备编码:', deviceCodeArray);
         showStatus(`使用已上传的CSV文件 - 有效: ${result.validCount}条`);
       } catch (err) {
         console.error('读取CSV文件失败:', err);
@@ -1333,13 +1002,8 @@ async function queryDeviceStatus() {
       }
     } else if (deviceCodesInput) {
       deviceCodeArray = deviceCodesInput.split(/\n|\r\n/).map(code => code.trim()).filter(code => code);
-      console.log('手动输入的设备编码:', deviceCodeArray);
-      
-      // 隐藏上传文件的控件及其标签
       const uploadFileGroup = document.getElementById('dropZoneQuery').closest('.input-group');
-      if (uploadFileGroup) {
-        uploadFileGroup.style.display = 'none';
-      }
+      if (uploadFileGroup) uploadFileGroup.style.display = 'none';
     } else {
       showStatus('请输入设备编码或上传Excel文件', true);
       return;
@@ -1376,7 +1040,6 @@ async function queryDeviceStatus() {
       }
     };
     
-    console.log('发送getDeviceOnlineStatus消息...');
     
     // 监听进度更新
     const progressUpdateListener = (message) => {
@@ -1396,7 +1059,6 @@ async function queryDeviceStatus() {
         deviceCodes: deviceCodeArray
       });
       
-      console.log('收到getDeviceOnlineStatus响应:', response);
       
       if (!response.success) {
         showStatus('查询设备在线状态失败: ' + response.error, true);
@@ -1404,7 +1066,6 @@ async function queryDeviceStatus() {
       }
       
       const deviceStatusList = response.deviceStatusList || [];
-      console.log('设备在线状态列表:', deviceStatusList);
       
       // 计算在线和离线设备数量
       const onlineCount = deviceStatusList.filter(item => item.online).length;
@@ -1463,7 +1124,6 @@ async function queryDeviceStatus() {
       showStatus('设备在线状态查询成功');
     } catch (err) {
       if (err.name === 'AbortError') {
-        console.log('查询已被用户中止');
         return;
       }
       throw err;
@@ -1478,7 +1138,6 @@ async function queryDeviceStatus() {
     }
   } catch (err) {
     console.error('查询设备在线状态失败:', err);
-    console.error('错误堆栈:', err.stack);
     showStatus('查询设备在线状态失败: ' + err.message, true);
     // 隐藏进度条
     const progressContainer = document.getElementById('deviceStatusProgress');
@@ -1540,7 +1199,6 @@ document.querySelectorAll('.copy-btn').forEach(btn => {
 
 // 清除级联功能页面数据
 function clearCascadeData() {
-  console.log('清除级联功能页面数据...');
   
   // 清除输入框
   document.getElementById('enteraccount').value = '';
@@ -1581,12 +1239,10 @@ function clearCascadeData() {
   status.style.display = 'none';
   
   showStatus('级联功能页面数据已清除', false);
-  console.log('级联功能页面数据清除完成');
 }
 
 // 清除设备查询页面数据
 function clearQueryData() {
-  console.log('清除设备查询页面数据...');
   
   // 清除输入框
   document.getElementById('deviceCodesQuery').value = '';
@@ -1625,32 +1281,14 @@ function clearQueryData() {
   status.style.display = 'none';
   
   showStatus('设备查询页面数据已清除', false);
-  console.log('设备查询页面数据清除完成');
 }
 
 // 画质监测功能
 async function queryQuality() {
-  console.log('开始查询设备画质...');
-  
   try {
-    const tab = await getVcpTab();
+    const tab = await ensureVcpTab();
+    if (!tab) return;
     
-    console.log('当前标签页:', tab);
-    console.log('当前URL:', tab ? tab.url : '未找到标签页');
-    
-    if (!tab) {
-      showStatus('请先登录 <a href="https://vcp.21cn.com/vcpCamera/web/index.html#/nopasslogin" target="_blank">天翼云眼视频监控平台</a>', true);
-      console.log('页面URL不匹配');
-      return;
-    }
-    
-    console.log('注入content script...');
-    await chrome.scripting.executeScript({
-      target: { tabId: tab.id },
-      files: ['content.js']
-    });
-    
-    // 获取设备编码
     const deviceCode = document.getElementById('deviceCodeQuality').value.trim();
     
     if (!deviceCode) {
@@ -1658,7 +1296,6 @@ async function queryQuality() {
       return;
     }
     
-    // 显示进度条
     const progressContainer = document.getElementById('qualityProgress');
     const progressFill = document.getElementById('qualityProgressFill');
     const progressPercent = document.getElementById('qualityProgressPercent');
@@ -1669,19 +1306,12 @@ async function queryQuality() {
     progressPercent.textContent = '0%';
     progressText.textContent = '正在初始化...';
     
-    console.log('发送getDeviceScreenShot消息...');
-    
     try {
-      const response = await chrome.tabs.sendMessage(tab.id, {
-        action: 'getDeviceScreenShot',
-        deviceCode: deviceCode
-      });
-      
-      console.log('收到getDeviceScreenShot响应:', response);
+      const response = await sendVcpMessage('getDeviceScreenShot', { deviceCode });
+      if (!response) return;
       
       if (!response.success) {
         showStatus('查询设备画质失败: ' + response.error, true);
-        // 显示错误信息
         document.getElementById('qualityResult').style.display = 'block';
         document.getElementById('qualityImage').style.display = 'none';
         document.getElementById('qualityError').style.display = 'block';
@@ -1690,15 +1320,12 @@ async function queryQuality() {
       }
       
       const imageUrl = response.imageUrl;
-      console.log('设备截图URL:', imageUrl);
       
-      // 显示查询结果
       document.getElementById('qualityResult').style.display = 'block';
       document.getElementById('qualityImage').style.display = 'block';
       document.getElementById('qualityError').style.display = 'none';
       document.getElementById('qualityImage').src = imageUrl;
       
-      // 添加点击事件监听器，实现图片放大
       document.getElementById('qualityImage').onclick = function() {
         const modal = document.getElementById('imageModal');
         const modalImage = document.getElementById('modalImage');
@@ -1721,7 +1348,6 @@ async function queryQuality() {
     }
   } catch (err) {
     console.error('查询设备画质失败:', err);
-    console.error('错误堆栈:', err.stack);
     showStatus('查询设备画质失败: ' + err.message, true);
     // 隐藏进度条
     const progressContainer = document.getElementById('qualityProgress');
@@ -1733,7 +1359,6 @@ async function queryQuality() {
 
 // 清除画质监测页面数据
 function clearQualityData() {
-  console.log('清除画质监测页面数据...');
   
   // 清除输入框
   document.getElementById('deviceCodeQuality').value = '';
@@ -1750,66 +1375,24 @@ function clearQualityData() {
   status.style.display = 'none';
   
   showStatus('画质监测页面数据已清除', false);
-  console.log('画质监测页面数据清除完成');
 }
 
 // 设备清单查询相关函数
 async function queryCustomListForDeviceList() {
-  console.log('开始查询企业主列表...');
   const userId = currentUserId;
   const account = document.getElementById('deviceListAccount').value.trim();
   
-  console.log('userId:', userId);
-  console.log('account:', account);
-  
-  if (!userId || !account) {
-    showStatus('请确保已获取用户ID并输入账号', true);
-    console.log('参数不完整');
-    return;
-  }
-  
-  if (!/^1[3-9]\d{9}$/.test(account)) {
-    showStatus('请输入11位手机号', true);
-    console.log('手机号格式不正确');
-    return;
-  }
+  if (!validatePhoneAccount(userId, account)) return;
   
   try {
-    const tab = await getVcpTab();
-    
-    console.log('当前标签页:', tab);
-    console.log('当前URL:', tab ? tab.url : '未找到标签页');
-    
-    if (!tab) {
-      showStatus('请先登录 <a href="https://vcp.21cn.com/vcpCamera/web/index.html#/nopasslogin" target="_blank">天翼云眼视频监控平台</a>', true);
-      console.log('页面URL不匹配');
-      return;
-    }
-    
-    console.log('注入content script...');
-    await chrome.scripting.executeScript({
-      target: { tabId: tab.id },
-      files: ['content.js']
-    });
-    
-    console.log('发送getCustomList消息...');
-    const response = await chrome.tabs.sendMessage(tab.id, { 
-      action: 'getCustomList', 
-      userId: userId,
-      account: account
-    });
-    
-    console.log('收到getCustomList响应:', response);
+    const response = await sendVcpMessage('getCustomList', { userId, account });
+    if (!response) return;
     
     if (response.success) {
       const customData = response.data;
       
-      console.log('customData:', customData);
-      
       if (customData && customData.data && customData.data.list) {
         const list = customData.data.list;
-        
-        console.log('用户列表:', list);
         
         if (list.length > 0) {
           const customListHtml = `
@@ -1834,10 +1417,7 @@ async function queryCustomListForDeviceList() {
           
           // 添加单选按钮事件监听
           document.querySelectorAll('.custom-radio').forEach(radio => {
-            radio.addEventListener('change', (e) => {
-              const customId = radio.getAttribute('data-id');
-              const customName = radio.getAttribute('data-name');
-              console.log('选中用户:', { customId, customName });
+            radio.addEventListener('change', () => {
             });
           });
         } else {
@@ -1855,13 +1435,11 @@ async function queryCustomListForDeviceList() {
     }
   } catch (err) {
     console.error('获取客户列表失败:', err);
-    console.error('错误堆栈:', err.stack);
     showStatus('获取客户列表失败: ' + err.message, true);
   }
 }
 
 async function queryDeviceList() {
-  console.log('开始查询设备清单...');
   
   const selectedRadio = document.querySelector('.custom-radio:checked');
   if (!selectedRadio) {
@@ -1870,37 +1448,17 @@ async function queryDeviceList() {
   }
   
   const userId = selectedRadio.getAttribute('data-id');
-  const userName = selectedRadio.getAttribute('data-name');
-  
-  console.log('选择的企业主:', { userId, userName });
   
   try {
-    const tab = await getVcpTab();
+    const tab = await ensureVcpTab();
+    if (!tab) return;
     
-    console.log('当前标签页:', tab);
-    console.log('当前URL:', tab ? tab.url : '未找到标签页');
-    
-    if (!tab) {
-      showStatus('请先登录 <a href="https://vcp.21cn.com/vcpCamera/web/index.html#/nopasslogin" target="_blank">天翼云眼视频监控平台</a>', true);
-      console.log('页面URL不匹配');
-      return;
-    }
-    
-    console.log('注入content script...');
-    await chrome.scripting.executeScript({
-      target: { tabId: tab.id },
-      files: ['content.js']
-    });
-    
-    // 重置停止标志
     shouldStopQuery = false;
     
-    // 显示进度条和停止按钮
     document.getElementById('deviceListProgress').classList.remove('hidden');
     document.getElementById('stopQueryBtn').style.display = 'inline-block';
     updateProgress(0, '正在初始化...');
     
-    // 分页获取所有设备数据
     let allDevices = [];
     let pageNo = 1;
     const pageSize = 10;
@@ -1910,11 +1468,7 @@ async function queryDeviceList() {
     showStatus('开始获取设备清单，正在处理...', false);
     
     while (hasMore && !shouldStopQuery) {
-      console.log(`获取第 ${pageNo} 页设备数据...`);
-      
-      // 检查是否需要停止
       if (shouldStopQuery) {
-        console.log('用户停止了查询');
         showStatus('查询已停止', false);
         document.getElementById('deviceListProgress').classList.add('hidden');
         document.getElementById('stopQueryBtn').style.display = 'none';
@@ -1928,8 +1482,6 @@ async function queryDeviceList() {
         pageSize: pageSize
       });
       
-      console.log('收到getEnterpriseUserDeviceList响应:', response);
-      
       if (!response.success) {
         showStatus('获取设备清单失败: ' + response.error, true);
         document.getElementById('deviceListProgress').classList.add('hidden');
@@ -1942,13 +1494,9 @@ async function queryDeviceList() {
         const deviceList = deviceData.data.deviceList;
         allDevices = [...allDevices, ...deviceList];
         
-        // 获取总数
         if (totalCount === 0) {
           totalCount = deviceData.data.total || 0;
         }
-        
-        console.log(`第 ${pageNo} 页获取到 ${deviceList.length} 条设备数据`);
-        console.log(`总数据量: ${totalCount}, 已获取: ${allDevices.length}`);
         
         // 更新进度条
         const progress = totalCount > 0 ? Math.min((allDevices.length / totalCount) * 100, 100) : 0;
@@ -1961,14 +1509,12 @@ async function queryDeviceList() {
           pageNo++;
         }
       } else {
-        console.log('没有更多数据或数据结构不正确');
         hasMore = false;
       }
     }
     
     // 检查是否是用户停止
     if (shouldStopQuery) {
-      console.log('查询被用户停止');
       showStatus('查询已停止', false);
       document.getElementById('deviceListProgress').classList.add('hidden');
       document.getElementById('stopQueryBtn').style.display = 'none';
@@ -1978,7 +1524,6 @@ async function queryDeviceList() {
     // 完成进度
     updateProgress(100, `查询完成！共获取 ${allDevices.length} 台设备`);
     
-    console.log('设备清单获取完成，共', allDevices.length, '条数据');
     
     // 隐藏进度条和停止按钮
     setTimeout(() => {
@@ -2036,45 +1581,19 @@ async function queryDeviceList() {
     }
   } catch (err) {
     console.error('查询设备清单失败:', err);
-    console.error('错误堆栈:', err.stack);
     showStatus('查询设备清单失败: ' + err.message, true);
   }
 }
 
 function exportDeviceList(deviceList) {
-  if (!deviceList || deviceList.length === 0) {
-    showStatus('没有可导出的数据', true);
-    return;
-  }
-  
-  // 创建CSV格式的导出数据
-  const csvContent = `序号,设备名称,设备编码,设备型号,位置
-${deviceList.map((item, index) => 
-  `${index + 1},${item.deviceName || '-'},${item.deviceCode || '-'},${item.deviceModel || '-'},${item.location || '-'}`
-).join('\n')}`;
-  
-  // 创建Blob并下载
-  const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
-  const url = URL.createObjectURL(blob);
-  const a = document.createElement('a');
-  a.href = url;
-  
-  // 生成带时间戳的文件名
-  const now = new Date();
-  const timestamp = now.toISOString().slice(0, 10).replace(/-/g, '') + 
-                   now.toTimeString().slice(0, 8).replace(/:/g, '');
-  a.download = `设备清单_${timestamp}.csv`;
-  
-  document.body.appendChild(a);
-  a.click();
-  document.body.removeChild(a);
-  URL.revokeObjectURL(url);
-  
-  showStatus('设备清单导出成功');
+  const headers = '序号,设备名称,设备编码,设备型号,位置';
+  const rows = (deviceList || []).map((item, index) =>
+    `${index + 1},${item.deviceName || '-'},${item.deviceCode || '-'},${item.deviceModel || '-'},${item.location || '-'}`
+  );
+  exportToCSV('设备清单', headers, rows);
 }
 
 function clearDeviceListData() {
-  console.log('清除设备清单查询页面数据...');
   
   // 清除输入框
   document.getElementById('deviceListAccount').value = '';
@@ -2104,7 +1623,6 @@ function clearDeviceListData() {
   status.style.display = 'none';
   
   showStatus('设备清单查询页面数据已清除', false);
-  console.log('设备清单查询页面数据清除完成');
 }
 
 // 标签页切换功能
@@ -2124,12 +1642,9 @@ document.querySelectorAll('.tab-btn').forEach(btn => {
 
 (async () => {
   const tab = await getVcpTab();
-  if (tab) {
-    console.log('页面加载完成，当前URL:', tab.url);
-    if (tab.url && tab.url.includes('vcp.21cn.com')) {
-      fetchData();
-      autoFillUserId();
-    }
+  if (tab && tab.url && tab.url.includes('vcp.21cn.com')) {
+    fetchData();
+    autoFillUserId();
   }
 })();
 
@@ -2137,76 +1652,40 @@ document.querySelectorAll('.tab-btn').forEach(btn => {
 document.getElementById('queryQualityBtn').addEventListener('click', queryQuality);
 document.getElementById('clearQualityDataBtn').addEventListener('click', clearQualityData);
 
+document.getElementById('closeModal').addEventListener('click', () => {
+  document.getElementById('imageModal').style.display = 'none';
+});
+document.getElementById('imageModal').addEventListener('click', (e) => {
+  if (e.target === document.getElementById('imageModal')) {
+    document.getElementById('imageModal').style.display = 'none';
+  }
+});
+
 // 监控目录调整页面事件监听器
 document.getElementById('queryRegionAdjustBtn').addEventListener('click', queryCustomListForRegionAdjust);
 document.getElementById('clearRegionAdjustDataBtn').addEventListener('click', clearRegionAdjustData);
 
 // 监控目录调整页面相关函数
 async function queryCustomListForRegionAdjust() {
-  console.log('开始查询企业主列表...');
   const userId = currentUserId;
   const account = document.getElementById('regionAdjustAccount').value.trim();
   
-  console.log('userId:', userId);
-  console.log('account:', account);
-  
-  if (!userId || !account) {
-    showStatus('请确保已获取用户ID并输入账号', true);
-    console.log('参数不完整');
-    return;
-  }
-  
-  if (!/^1[3-9]\d{9}$/.test(account)) {
-    showStatus('请输入11位手机号', true);
-    console.log('手机号格式不正确');
-    return;
-  }
+  if (!validatePhoneAccount(userId, account)) return;
   
   try {
-    const tab = await getVcpTab();
-    
-    console.log('当前标签页:', tab);
-    console.log('当前URL:', tab ? tab.url : '未找到标签页');
-    
-    if (!tab) {
-      showStatus('请先登录 <a href="https://vcp.21cn.com/vcpCamera/web/index.html#/nopasslogin" target="_blank">天翼云眼视频监控平台</a>', true);
-      console.log('页面URL不匹配');
-      return;
-    }
-    
-    console.log('注入content script...');
-    await chrome.scripting.executeScript({
-      target: { tabId: tab.id },
-      files: ['content.js']
-    });
-    
-    console.log('发送getCustomList消息...');
-    const response = await chrome.tabs.sendMessage(tab.id, { 
-      action: 'getCustomList', 
-      userId: userId,
-      account: account
-    });
-    
-    console.log('收到getCustomList响应:', response);
+    const response = await sendVcpMessage('getCustomList', { userId, account });
+    if (!response) return;
     
     if (response.success) {
       const customData = response.data;
-      
-      console.log('customData:', customData);
       
       if (customData && customData.data && customData.data.list) {
         const list = customData.data.list;
         const qiyezhuList = list.filter(item => item.roleName === '企业主');
         
-        console.log('筛选后的企业主列表:', qiyezhuList);
-        
         if (qiyezhuList.length > 0) {
           showStatus('该账户是企业主，正在获取监控目录...');
-          
-          // 存储企业主ID
           currentEntUserId = qiyezhuList[0].id;
-          console.log('存储企业主ID:', currentEntUserId);
-          
           await getUserRegionListForRegionAdjust(qiyezhuList[0].id);
         } else {
           document.getElementById('regionAdjustListResult').style.display = 'block';
@@ -2223,79 +1702,36 @@ async function queryCustomListForRegionAdjust() {
     }
   } catch (err) {
     console.error('获取客户列表失败:', err);
-    console.error('错误堆栈:', err.stack);
     showStatus('获取客户列表失败: ' + err.message, true);
   }
 }
 
 async function getUserRegionListForRegionAdjust(userId) {
-  console.log('开始获取用户区域列表...');
-  
   try {
-    const tab = await getVcpTab();
-    
-    console.log('当前标签页:', tab);
-    console.log('当前URL:', tab ? tab.url : '未找到标签页');
-    
-    if (!tab) {
-      showStatus('请先登录 <a href="https://vcp.21cn.com/vcpCamera/web/index.html#/nopasslogin" target="_blank">天翼云眼视频监控平台</a>', true);
-      console.log('页面URL不匹配');
-      return;
-    }
-    
-    console.log('发送getUserRegionList消息...');
-    const response = await chrome.tabs.sendMessage(tab.id, { 
-      action: 'getUserRegionList',
-      userId: userId
-    });
-    
-    console.log('收到getUserRegionList响应:', response);
+    const response = await sendVcpMessage('getUserRegionList', { userId });
+    if (!response) return;
     
     if (response.success) {
-      console.log('获取regionCode成功:', response.regionCode);
       await getLevelCusRegionForRegionAdjust();
     } else {
       showStatus('获取区域代码失败: ' + response.error, true);
     }
   } catch (err) {
     console.error('获取区域代码失败:', err);
-    console.error('错误堆栈:', err.stack);
     showStatus('获取区域代码失败: ' + err.message, true);
   }
 }
 
 async function getLevelCusRegionForRegionAdjust() {
-  console.log('开始获取监控目录...');
-  
   try {
-    const tab = await getVcpTab();
-    
-    console.log('当前标签页:', tab);
-    console.log('当前URL:', tab ? tab.url : '未找到标签页');
-    
-    if (!tab) {
-      showStatus('请先登录 <a href="https://vcp.21cn.com/vcpCamera/web/index.html#/nopasslogin" target="_blank">天翼云眼视频监控平台</a>', true);
-      console.log('页面URL不匹配');
-      return;
-    }
-    
-    console.log('发送getLevelCusRegion消息...');
-    const response = await chrome.tabs.sendMessage(tab.id, { 
-      action: 'getLevelCusRegion'
-    });
-    
-    console.log('收到getLevelCusRegion响应:', response);
+    const response = await sendVcpMessage('getLevelCusRegion');
+    if (!response) return;
     
     if (response.success) {
       const regionData = response.data;
       
-      console.log('regionData:', regionData);
-      
       if (regionData && regionData.data && regionData.data.cusRegionList) {
         const regionList = regionData.data.cusRegionList;
-        
-        console.log('监控目录列表:', regionList);
-        
         const regionHtml = renderRegionTree(regionList);
         
         document.getElementById('regionAdjustListResult').style.display = 'block';
@@ -2313,13 +1749,11 @@ async function getLevelCusRegionForRegionAdjust() {
     }
   } catch (err) {
     console.error('获取监控目录失败:', err);
-    console.error('错误堆栈:', err.stack);
     showStatus('获取监控目录失败: ' + err.message, true);
   }
 }
 
 function clearRegionAdjustData() {
-  console.log('清除监控目录调整页面数据...');
   
   // 清除输入框
   document.getElementById('regionAdjustAccount').value = '';
@@ -2342,7 +1776,6 @@ function clearRegionAdjustData() {
   status.style.display = 'none';
   
   showStatus('监控目录调整页面数据已清除', false);
-  console.log('监控目录调整页面数据清除完成');
 }
 
 
@@ -2375,31 +1808,9 @@ let currentEntUserId = '';
 let currentAccount = '';
 
 async function autoFillUserId() {
-  console.log('开始获取用户信息...');
-  
   try {
-    const tab = await getVcpTab();
-    
-    console.log('当前标签页:', tab);
-    console.log('当前URL:', tab ? tab.url : '未找到标签页');
-    
-    if (!tab) {
-      console.log('页面URL不匹配');
-      return;
-    }
-    
-    console.log('注入content script...');
-    await chrome.scripting.executeScript({
-      target: { tabId: tab.id },
-      files: ['content.js']
-    });
-    
-    console.log('发送getUserId消息...');
-    const response = await chrome.tabs.sendMessage(tab.id, { 
-      action: 'getUserId'
-    });
-    
-    console.log('收到getUserId响应:', response);
+    const response = await sendVcpMessage('getUserId');
+    if (!response) return;
     
     if (response.success) {
       const userId = response.userId;
@@ -2408,25 +1819,16 @@ async function autoFillUserId() {
       currentUserId = userId;
       currentAccount = account;
       
-      console.log('获取到userId:', userId);
-      console.log('获取到account:', account);
-      
       document.getElementById('userIdDisplay').textContent = maskUserId(userId) || '未检测到用户ID';
       document.getElementById('accountDisplay').textContent = maskPhone(account) || '未检测到手机号';
       
-      if (userId) {
-        console.log('user_ID:', userId);
-      }
-      
       showStatus('获取用户信息成功');
     } else {
-      console.log('未检测到用户信息');
       document.getElementById('userIdDisplay').textContent = '未检测到用户ID';
       document.getElementById('accountDisplay').textContent = '未检测到手机号';
     }
   } catch (err) {
     console.error('获取用户信息失败:', err);
-    console.error('错误堆栈:', err.stack);
     document.getElementById('userIdDisplay').textContent = '获取失败';
     document.getElementById('accountDisplay').textContent = '获取失败';
   }
