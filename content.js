@@ -284,7 +284,7 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
       return true;
     }
 
-    const batchSize = 80;
+    const batchSize = 800;
     const totalDevices = deviceList.length;
     let processedCount = 0;
     const allCascadeResults = [];
@@ -604,6 +604,31 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
       })
       .catch(err => {
         console.error('deleteRegion失败:', err);
+        sendResponse({ success: false, error: err.message });
+      });
+
+    return true;
+  }
+
+  if (request.action === 'exportCatalogCodeEmail') {
+    const { userId, cusRegionId, email, entUserId: requestEntUserId } = request;
+    const params = new URLSearchParams({
+      userId: userId,
+      cusRegionId: cusRegionId,
+      email: email,
+      entUserId: requestEntUserId || entUserId || ''
+    });
+
+    vcpGet('https://vcp.21cn.com/vcpCamera/cusRegion/exportCatalogCodeEmail', params)
+      .then(result => {
+        if (result.code === 0 || result.code === 20000) {
+          sendResponse({ success: true, data: result });
+        } else {
+          sendResponse({ success: false, error: result.msg || '导出失败' });
+        }
+      })
+      .catch(err => {
+        console.error('exportCatalogCodeEmail失败:', err);
         sendResponse({ success: false, error: err.message });
       });
 

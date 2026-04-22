@@ -302,6 +302,7 @@ function renderRegionTree(regionList, level = 0) {
           <input type="radio" name="region-radio" class="region-radio" data-id="${item.id}" data-name="${item.name || ''}">
           <span class="region-name">${item.name || '未命名'}</span>
           <span class="region-id">(ID: ${item.id})</span>
+          <span class="region-device-count" style="font-size: 10px; color: #64748b; font-weight: 500;">(${item.onlineCount || 0}/${item.deviceCount || 0})</span>
         </div>
         <div style="display: flex; gap: 4px;">
           <button class="add-subregion-btn" data-id="${item.id}" style="background: linear-gradient(135deg, #10b981 0%, #059669 100%); color: white; border: none; padding: 4px 8px; border-radius: 4px; cursor: pointer; font-size: 12px; font-weight: bold; box-shadow: 0 2px 6px rgba(16, 185, 129, 0.25); border: 1px solid rgba(255, 255, 255, 0.3);">+</button>
@@ -1664,6 +1665,7 @@ document.getElementById('imageModal').addEventListener('click', (e) => {
 // 监控目录调整页面事件监听器
 document.getElementById('queryRegionAdjustBtn').addEventListener('click', queryCustomListForRegionAdjust);
 document.getElementById('clearRegionAdjustDataBtn').addEventListener('click', clearRegionAdjustData);
+document.getElementById('exportCatalogBtn').addEventListener('click', exportCatalogCodeEmail);
 
 // 监控目录调整页面相关函数
 async function queryCustomListForRegionAdjust() {
@@ -1776,6 +1778,45 @@ function clearRegionAdjustData() {
   status.style.display = 'none';
   
   showStatus('监控目录调整页面数据已清除', false);
+}
+
+async function exportCatalogCodeEmail() {
+  if (!currentEntUserId) {
+    showStatus('请先获取企业主信息', true);
+    return;
+  }
+
+  const email = prompt('请输入邮箱地址:');
+  if (!email || !email.trim()) {
+    showStatus('邮箱地址不能为空', true);
+    return;
+  }
+
+  const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+  if (!emailRegex.test(email.trim())) {
+    showStatus('请输入有效的邮箱地址', true);
+    return;
+  }
+
+  try {
+    const response = await sendVcpMessage('exportCatalogCodeEmail', {
+      userId: currentUserId,
+      cusRegionId: '',
+      email: email.trim(),
+      entUserId: currentEntUserId
+    });
+
+    if (!response) return;
+
+    if (response.success) {
+      showStatus('目录导出成功，请查收邮件');
+    } else {
+      showStatus('目录导出失败: ' + response.error, true);
+    }
+  } catch (err) {
+    console.error('导出目录失败:', err);
+    showStatus('导出目录失败: ' + err.message, true);
+  }
 }
 
 
