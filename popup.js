@@ -215,14 +215,26 @@ async function getCustomList() {
     
     if (response.success) {
       const customData = response.data;
+      console.log('getCustomList response:', response);
       
       if (customData && customData.data && customData.data.list) {
         const list = customData.data.list;
+        console.log('Custom list:', list);
         const qiyezhuList = list.filter(item => item.roleName === '企业主');
+        console.log('Qiyezhu list:', qiyezhuList);
         
         if (qiyezhuList.length > 0) {
+          const qiyezhu = qiyezhuList[0];
+          console.log('Qiyezhu data:', qiyezhu);
           showStatus('该账户是企业主，正在获取监控目录...');
-          await getUserRegionList(qiyezhuList[0].id);
+          
+          const useDeviceCount = qiyezhu.useDeviceCount || 0;
+          const deviceCount = qiyezhu.deviceCount || 0;
+          console.log('Cascade service info:', useDeviceCount, '/', deviceCount);
+          currentCascadeServiceInfo = `级联服务: ${useDeviceCount}/${deviceCount}`;
+          console.log('Current cascade service info:', currentCascadeServiceInfo);
+          
+          await getUserRegionList(qiyezhu.id);
           await getLevelCusRegion();
         } else {
           document.getElementById('customListResult').style.display = 'block';
@@ -248,11 +260,14 @@ function clearRegionData() {
   document.getElementById('customList').innerHTML = '-';
   document.getElementById('levelCusRegionResult').style.display = 'none';
   document.getElementById('levelCusRegion').innerHTML = '-';
+  const cascadeServiceInfo = document.getElementById('cascadeServiceInfo');
+  if (cascadeServiceInfo) {
+    cascadeServiceInfo.textContent = '';
+  }
+  currentCascadeServiceInfo = '';
 }
 
 async function getLevelCusRegion() {
-  clearRegionData();
-  
   try {
     const response = await sendVcpMessage('getLevelCusRegion');
     if (!response) return;
@@ -266,6 +281,15 @@ async function getLevelCusRegion() {
         
         document.getElementById('levelCusRegionResult').style.display = 'block';
         document.getElementById('levelCusRegion').innerHTML = regionHtml;
+        
+        const cascadeServiceInfo = document.getElementById('cascadeServiceInfo');
+        if (cascadeServiceInfo && currentCascadeServiceInfo) {
+          console.log('Displaying cascade service info:', currentCascadeServiceInfo);
+          cascadeServiceInfo.textContent = currentCascadeServiceInfo;
+        } else {
+          console.log('No cascade service info to display');
+        }
+        
         showStatus('获取监控目录成功');
         
         addRegionClickHandlers();
@@ -1847,6 +1871,7 @@ let currentUserId = '';
 // 全局变量：企业主ID（用于监控目录调整）
 let currentEntUserId = '';
 let currentAccount = '';
+let currentCascadeServiceInfo = '';
 
 async function autoFillUserId() {
   try {
