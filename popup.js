@@ -1873,6 +1873,10 @@ let currentEntUserId = '';
 let currentAccount = '';
 let currentCascadeServiceInfo = '';
 
+// 汇聚功能2全局数据
+let cascade2Data = null;
+let cascade2GroupedData = null;
+
 async function autoFillUserId() {
   try {
     const response = await sendVcpMessage('getUserId');
@@ -1899,3 +1903,927 @@ async function autoFillUserId() {
     document.getElementById('accountDisplay').textContent = '获取失败';
   }
 }
+
+// ==================== 汇聚功能2 ====================
+
+// 读取汇聚功能2的CSV文件（包含设备编码、汇聚手机号码、目标目录三列）
+async function readCascade2CSVFile(file) {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    
+    reader.onload = (e) => {
+      try {
+        const text = e.target.result;
+        const lines = text.split('\n');
+        const data = [];
+        
+        // 跳过表头，从第二行开始读取
+        for (let i = 1; i < lines.length; i++) {
+          const line = lines[i].trim();
+          if (!line) continue;
+          
+          // 解析CSV行（处理逗号分隔，支持引号包裹的字段）
+          const fields = parseCSVLine(line);
+          if (fields.length >= 3) {
+            data.push({
+              deviceCode: fields[0].trim(),
+              phone: fields[1].trim(),
+              targetDir: fields[2].trim()
+            });
+          } else if (fields.length >= 2) {
+            data.push({
+              deviceCode: fields[0].trim(),
+              phone: fields[1].trim(),
+              targetDir: ''
+            });
+          }
+        }
+        
+        // 去重处理（以设备编码+手机号码为唯一键）
+        const seen = new Set();
+        const uniqueData = [];
+        for (const item of data) {
+          const key = item.deviceCode + '|' + item.phone;
+          if (!seen.has(key) && item.deviceCode && item.phone) {
+            seen.add(key);
+            uniqueData.push(item);
+          }
+        }
+        
+        resolve({
+          data: uniqueData,
+          totalUpload: data.length,
+          duplicateCount: data.length - uniqueData.length,
+          validCount: uniqueData.length
+        });
+      } catch (err) {
+        reject(err);
+      }
+    };
+    
+    reader.onerror = () => reject(new Error('文件读取失败'));
+    reader.readAsText(file, 'UTF-8');
+  });
+}
+
+// 解析CSV行
+function parseCSVLine(line) {
+  const result = [];
+  let current = '';
+  let inQuotes = false;
+  
+  for (let i = 0; i < line.length; i++) {
+    const char = line[i];
+    if (char === '"') {
+      if (inQuotes && line[i + 1] === '"') {
+        current += '"';
+        i++;
+      } else {
+        inQuotes = !inQuotes;
+      }
+    } else if (char === ',' && !inQuotes) {
+      result.push(current);
+      current = '';
+    } else {
+      current += char;
+    }
+  }
+  result.push(current);
+  return result;
+}
+
+/**
+ * 汇聚功能2 - 数据预处理：按手机号码和目标目录进行二次分组
+ * 
+ * 功能说明：
+ * - 将CSV数据按"手机号"分组后，再按"目标目录"二次分组
+ * - 支持同一手机号下的设备级联到不同的目标目录
+ * 
+ * 数据结构示例：
+ * 输入数据：
+ *   [
+ *     { deviceCode: 'A', phone: '13800138000', targetDir: '测试目录' },
+ *     { deviceCode: 'B', phone: '13800138000', targetDir: '生产目录' },
+ *     { deviceCode: 'C', phone: '13800138000', targetDir: '测试目录' }
+ *   ]
+ * 
+ * 输出结构：
+ *   {
+ *     "13800138000": {
+ *       phone: "13800138000",
+ *       dirGroups: {
+ *         "测试目录": { targetDir: "测试目录", devices: [设备A, 设备C] },
+ *         "生产目录": { targetDir: "生产目录", devices: [设备B] }
+ *       }
+ *     }
+ *   }
+ * 
+ * @param {Array} data - CSV解析后的原始数据数组
+ * @returns {Object} 按手机号和目录分组的对象
+ */
+function groupByPhoneAndDir(data) {
+  const phoneGroups = {};
+  
+  for (const item of data) {
+    const phone = item.phone;
+    const targetDir = item.targetDir || '默认目录';
+    
+    // 第一层：按手机号分组
+    if (!phoneGroups[phone]) {
+      phoneGroups[phone] = {
+        phone: phone,
+        dirGroups: {}
+      };
+    }
+    
+    // 第二层：在同一个手机号下，再按目标目录分组
+    if (!phoneGroups[phone].dirGroups[targetDir]) {
+      phoneGroups[phone].dirGroups[targetDir] = {
+        targetDir: targetDir,
+        devices: []
+      };
+    }
+    
+    // 将设备添加到对应的（手机号+目录）组中
+    phoneGroups[phone].dirGroups[targetDir].devices.push({
+      deviceCode: item.deviceCode,
+      targetDir: targetDir
+    });
+  }
+  
+  return phoneGroups;
+}
+
+// 处理汇聚功能2的CSV文件上传
+async function processCascade2CSVFile(file) {
+  try {
+    const result = await readCascade2CSVFile(file);
+    cascade2Data = result.data;
+    cascade2GroupedData = groupByPhoneAndDir(result.data);
+    
+    const phoneCount = Object.keys(cascade2GroupedData).length;
+    let totalDirGroups = 0;
+    for (const phone in cascade2GroupedData) {
+      totalDirGroups += Object.keys(cascade2GroupedData[phone].dirGroups).length;
+    }
+    const deviceCount = result.data.length;
+    
+    // 显示上传统计
+    const uploadStatsHtml = `
+      <div style="overflow-x: auto;">
+        <table class="data-table" style="margin-top: 8px; width: 100%; border-collapse: collapse; border-radius: 12px; overflow: hidden; box-shadow: 0 4px 16px rgba(0, 0, 0, 0.08); background: rgba(255, 255, 255, 0.8); backdrop-filter: blur(10px); border: 1px solid rgba(226, 232, 240, 0.5);">
+          <tr style="background: linear-gradient(135deg, rgba(248, 250, 252, 0.9) 0%, rgba(241, 245, 249, 0.9) 100%); border-bottom: 1px solid rgba(226, 232, 240, 0.5); backdrop-filter: blur(10px);">
+            <th style="padding: 12px 14px; text-align: left; border: 1px solid rgba(226, 232, 240, 0.5); font-weight: 700; font-size: 9px; color: #1e293b; letter-spacing: -0.2px; text-transform: uppercase;">总上传条数</th>
+            <th style="padding: 12px 14px; text-align: left; border: 1px solid rgba(226, 232, 240, 0.5); font-weight: 700; font-size: 9px; color: #1e293b; letter-spacing: -0.2px; text-transform: uppercase;">重复条数</th>
+            <th style="padding: 12px 14px; text-align: left; border: 1px solid rgba(226, 232, 240, 0.5); font-weight: 700; font-size: 9px; color: #1e293b; letter-spacing: -0.2px; text-transform: uppercase;">有效条数</th>
+            <th style="padding: 12px 14px; text-align: left; border: 1px solid rgba(226, 232, 240, 0.5); font-weight: 700; font-size: 9px; color: #1e293b; letter-spacing: -0.2px; text-transform: uppercase;">手机号码数</th>
+          </tr>
+          <tr style="border-bottom: 1px solid rgba(226, 232, 240, 0.5); transition: all 0.2s ease; font-size: 10px;">
+            <td style="padding: 12px 14px; border: 1px solid rgba(226, 232, 240, 0.5); color: #475569; font-weight: 500;">${result.totalUpload}</td>
+            <td style="padding: 12px 14px; border: 1px solid rgba(226, 232, 240, 0.5); color: #c5221f; font-weight: 600;">${result.duplicateCount}</td>
+            <td style="padding: 12px 14px; border: 1px solid rgba(226, 232, 240, 0.5); color: #137333; font-weight: 600;">${result.validCount}</td>
+            <td style="padding: 12px 14px; border: 1px solid rgba(226, 232, 240, 0.5); color: #3b82f6; font-weight: 600;">${phoneCount}</td>
+          </tr>
+        </table>
+      </div>
+      <button id="reuploadBtnCascade2" style="margin-top: 12px; width: 100%; background: linear-gradient(135deg, #3b82f6 0%, #60a5fa 100%); color: white; border: none; padding: 10px; border-radius: 10px; cursor: pointer; font-size: 11px; font-weight: 700; box-shadow: 0 4px 12px rgba(59, 130, 246, 0.25); letter-spacing: -0.2px; backdrop-filter: blur(10px); border: 1px solid rgba(255, 255, 255, 0.3); transition: all 0.25s ease;">🔄 重新上传</button>
+    `;
+    
+    document.getElementById('uploadStatsCascade2').style.display = 'block';
+    document.getElementById('uploadStatsContentCascade2').innerHTML = uploadStatsHtml;
+    
+    // 隐藏上传区域
+    const uploadFileGroup = document.getElementById('dropZoneCascade2').closest('.input-group');
+    if (uploadFileGroup) uploadFileGroup.style.display = 'none';
+    
+    // 重新上传按钮事件
+    document.getElementById('reuploadBtnCascade2').addEventListener('click', () => {
+      if (uploadFileGroup) uploadFileGroup.style.display = 'block';
+      document.getElementById('uploadStatsCascade2').style.display = 'none';
+      document.getElementById('excelFileCascade2').value = '';
+      document.getElementById('cascade2GroupResult').style.display = 'none';
+      cascade2Data = null;
+      cascade2GroupedData = null;
+      showStatus('可以重新上传文件');
+    });
+    
+    // 显示分组预览
+    let groupHtml = '<div style="font-size: 10px;">';
+    for (const [phone, phoneGroup] of Object.entries(cascade2GroupedData)) {
+      const dirCount = Object.keys(phoneGroup.dirGroups).length;
+      const totalDevices = Object.values(phoneGroup.dirGroups).reduce((sum, dg) => sum + dg.devices.length, 0);
+      
+      groupHtml += `
+        <div style="margin-bottom: 10px; padding: 8px; background: rgba(59, 130, 246, 0.05); border-radius: 8px; border: 1px solid rgba(226, 232, 240, 0.5);">
+          <div style="font-weight: 700; color: #1e293b; margin-bottom: 6px;">📱 ${phone} (${totalDevices}台设备, ${dirCount}个目录)</div>
+      `;
+      
+      for (const [dirName, dirGroup] of Object.entries(phoneGroup.dirGroups)) {
+        groupHtml += `
+          <div style="margin-left: 12px; margin-bottom: 4px; padding: 4px 6px; background: rgba(16, 185, 129, 0.05); border-radius: 4px; border-left: 3px solid #10b981;">
+            <div style="color: #059669; font-weight: 600; font-size: 9px;">📁 ${dirName} (${dirGroup.devices.length}台)</div>
+            <div style="color: #94a3b8; font-size: 8px; margin-top: 2px;">设备: ${dirGroup.devices.map(d => d.deviceCode).join(', ')}</div>
+          </div>
+        `;
+      }
+      
+      groupHtml += '</div>';
+    }
+    groupHtml += '</div>';
+    
+    document.getElementById('cascade2GroupContent').innerHTML = groupHtml;
+    document.getElementById('cascade2GroupResult').style.display = 'block';
+    
+    showStatus(`文件读取成功 - 共${phoneCount}个手机号码，${totalDirGroups}个目录组，${deviceCount}台设备`);
+  } catch (err) {
+    console.error('处理汇聚功能2文件失败:', err);
+    showStatus('处理文件失败: ' + err.message, true);
+  }
+}
+
+// 下载汇聚功能2模板
+function downloadCascade2Template() {
+  const csvContent = `设备编码,汇聚手机号码,目标目录
+51111110441324005448,13800138000,测试目录1
+51111110441324005441,13800138000,测试目录1
+51111110441324005442,13900139000,测试目录2
+51111110441324005443,13800138000,生产目录
+51111110441324005444,13800138000,测试目录1`;
+  
+  const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = '汇聚功能2模板.csv';
+  document.body.appendChild(a);
+  a.click();
+  document.body.removeChild(a);
+  URL.revokeObjectURL(url);
+  
+  showStatus('模板下载成功');
+}
+
+// 更新汇聚功能2进度条
+function updateCascade2Progress(percent, text) {
+  const progressFill = document.getElementById('cascade2ProgressFill');
+  const progressPercent = document.getElementById('cascade2ProgressPercent');
+  const progressText = document.getElementById('cascade2ProgressText');
+  
+  if (progressFill) progressFill.style.width = percent + '%';
+  if (progressPercent) progressPercent.textContent = Math.round(percent) + '%';
+  if (progressText) progressText.textContent = text;
+}
+
+// 汇聚功能2：查询企业主信息
+async function getCustomListForCascade2(phone) {
+  const response = await sendVcpMessage('getCustomList', { userId: currentUserId, account: phone });
+  if (!response || !response.success) {
+    throw new Error(response?.error || '查询企业主失败');
+  }
+  
+  const customData = response.data;
+  if (!customData || !customData.data || !customData.data.list) {
+    throw new Error('未获取到客户列表');
+  }
+  
+  const qiyezhuList = customData.data.list.filter(item => item.roleName === '企业主');
+  if (qiyezhuList.length === 0) {
+    throw new Error('该账户不是企业主');
+  }
+  
+  const qiyezhu = qiyezhuList[0];
+  return {
+    entUserId: qiyezhu.id,
+    cascadeCode: qiyezhu.cascadeCode,
+    useDeviceCount: qiyezhu.useDeviceCount || 0,
+    deviceCount: qiyezhu.deviceCount || 0,
+    remainingCount: (qiyezhu.deviceCount || 0) - (qiyezhu.useDeviceCount || 0)
+  };
+}
+
+// 汇聚功能2：获取企业主根目录列表
+async function getLevelCusRegionForCascade2(entUserId) {
+  const response = await sendVcpMessage('getLevelCusRegion');
+  if (!response || !response.success) {
+    throw new Error(response?.error || '获取监控目录失败');
+  }
+  
+  const regionData = response.data;
+  if (!regionData || !regionData.data || !regionData.data.cusRegionList) {
+    throw new Error('未获取到监控目录数据');
+  }
+  
+  return regionData.data.cusRegionList;
+}
+
+// 汇聚功能2：创建目录（如果不存在）
+async function ensureRegionExists(regionList, targetDirName, entUserId) {
+  if (!targetDirName) return { id: '', name: '' };
+  
+  // 查找是否已存在同名目录
+  const existingRegion = regionList.find(r => r.name === targetDirName);
+  if (existingRegion) {
+    return { id: existingRegion.id, name: existingRegion.name };
+  }
+  
+  // 不存在则创建新目录（作为根目录）
+  const response = await sendVcpMessage('saveRegion', {
+    cusRegionNames: targetDirName,
+    cusRegionId: '',
+    entUserId: entUserId,
+    isEdit: false
+  });
+  
+  if (!response || !response.success) {
+    throw new Error(response?.error || '创建目录失败');
+  }
+  
+  // 重新获取目录列表以获取新目录ID
+  const newRegionList = await getLevelCusRegionForCascade2(entUserId);
+  const newRegion = newRegionList.find(r => r.name === targetDirName);
+  
+  if (newRegion) {
+    return { id: newRegion.id, name: newRegion.name };
+  }
+  
+  throw new Error('创建目录后未找到新目录');
+}
+
+// 汇聚功能2：查询设备信息
+async function getDeviceInfoForCascade2(deviceCodes, userRegionCode = '') {
+  const deviceList = [];
+  const failedCodes = [];
+  const batchSize = 5;
+
+  for (let i = 0; i < deviceCodes.length; i += batchSize) {
+    const batch = deviceCodes.slice(i, i + batchSize);
+    const batchPromises = batch.map(async (deviceCode) => {
+      try {
+        const response = await sendVcpMessage('getRegionsByDevTreeType', { 
+          deviceCodes: [deviceCode],
+          deviceCode: deviceCode,
+          regionCode: userRegionCode,
+          pageSize: '1000'
+        });
+        if (response && response.success && response.deviceList && response.deviceList.length > 0) {
+          return response.deviceList[0];
+        }
+        return null;
+      } catch (err) {
+        console.error(`设备 ${deviceCode} 查询失败:`, err);
+        return null;
+      }
+    });
+
+    const batchResults = await Promise.all(batchPromises);
+    for (let j = 0; j < batchResults.length; j++) {
+      if (batchResults[j]) {
+        deviceList.push(batchResults[j]);
+      } else {
+        failedCodes.push(batch[j]);
+      }
+    }
+  }
+
+  return { deviceList, failedCodes };
+}
+
+/**
+ * 汇聚功能2 - 核心处理逻辑：对单个（手机号+目标目录）组合执行级联
+ * 
+ * 功能说明：
+ * 这是汇聚功能2的最小执行单元，处理一个目录组下的所有设备级联操作。
+ * 每个目录组 = 一个手机号 + 一个目标目录 + 该目录下的设备列表
+ * 
+ * 执行流程（5个关键步骤）：
+ * 
+ * 步骤1：检查级联容量
+ *   - 判断企业主剩余的级联路数是否足够
+ *   - 如果不足，标记"级联路数不足"并返回失败结果
+ * 
+ * 步骤2：确保目标目录存在
+ *   - 查询企业主的监控根目录列表
+ *   - 检查目标目录是否已存在
+ *   - 如果不存在，调用saveRegion接口创建新目录
+ *   - 获取目录ID和名称，用于后续级联操作
+ * 
+ * 步骤3：获取用户区域编码(regionCode)
+ *   - 调用getUserRegionList接口获取用户的regionCode
+ *   - regionCode用于查询设备信息时的参数
+ *   - 注意：这个regionCode来自用户信息，不是目录树的code
+ * 
+ * 步骤4：查询设备详细信息
+ *   - 根据设备码批量查询设备的详细信息
+ *   - 调用getRegionsByDevTreeType接口
+ *   - 参数：deviceCode(设备码) + regionCode(区域编码) + pageSize(每页数量)
+ *   - 返回deviceList: [{regionId, deviceCode, regionName, deviceName}]
+ *   - 查询失败的设备标记为"设备不存在"
+ * 
+ * 步骤5：执行级联操作
+ *   - 调用createCascadeTask接口创建级联任务
+ *   - 将设备级联到指定的目标目录(pRegionId/pRegionName)
+ *   - 记录每个设备的级联成功/失败状态
+ * 
+ * @param {String} phone - 企业主手机号码
+ * @param {Object} dirGroup - 目录组对象 { targetDir, devices[] }
+ * @param {Object} qiyezhuInfo - 企业主信息 { entUserId, remainingCount, ... }
+ * @param {String} userId - 当前操作员ID
+ * @param {Function} progressCallback - 进度回调函数(msg) => void
+ * @returns {Object} 处理结果 { phone, targetDir, success, message, deviceResults[] }
+ */
+async function executeCascade2ForDirGroup(phone, dirGroup, qiyezhuInfo, userId, progressCallback) {
+  const results = {
+    phone,
+    targetDir: dirGroup.targetDir,
+    success: false,
+    message: '',
+    deviceResults: []
+  };
+  
+  try {
+    // ========== 步骤1：判断级联剩余路数 ==========
+    // 业务规则：企业主有级联路数限制，必须确保剩余路数 >= 待级联设备数
+    // 例如：剩余10路，要级联15台设备 → 路数不足，无法继续
+    const deviceCount = dirGroup.devices.length;
+    if (qiyezhuInfo.remainingCount < deviceCount) {
+      results.success = false;
+      results.message = `级联路数不足 (剩余${qiyezhuInfo.remainingCount}路，需要${deviceCount}路)`;
+      // 为该目录下的每台设备都生成失败记录
+      for (const device of dirGroup.devices) {
+        results.deviceResults.push({
+          deviceCode: device.deviceCode,
+          success: false,
+          message: '级联路数不足'
+        });
+      }
+      return results;
+    }
+    
+    // ========== 步骤2：确保目标目录存在（如果不存在则创建）==========
+    // 参考功能：saveRegion（保存/创建目录）
+    // 目的：确保设备能级联到正确的目标目录下
+    // 逻辑：
+    //   1. 获取企业主根目录列表
+    //   2. 遍历查找是否有同名的目录
+    //   3. 如果找到 → 返回该目录信息(id, name)
+    //   4. 如果没找到 → 调用API创建新目录，返回新建的目录信息
+    const targetDirName = dirGroup.targetDir || '';
+    let regionInfo = { id: '', name: '' };
+    
+    if (targetDirName && targetDirName !== '默认目录') {
+      progressCallback(`正在处理目录: ${targetDirName}...`);
+      // 获取企业主的所有目录列表
+      const regionList = await getLevelCusRegionForCascade2(qiyezhuInfo.entUserId);
+      // 确保目标目录存在（不存在则自动创建）
+      regionInfo = await ensureRegionExists(regionList, targetDirName, qiyezhuInfo.entUserId);
+      progressCallback(`目录处理完成: ${regionInfo.name}`);
+    } else {
+      // 目标目录为空或默认值时，不指定具体目录
+      regionInfo = { id: '', name: '' };
+    }
+    
+    // ========== 步骤3：获取用户regionCode（用于设备信息查询）==========
+    // 接口：getUserRegionList
+    // 用途：查询设备信息时需要传入regionCode参数
+    // 注意：
+    //   - 这个regionCode是用户的区域编码，从getUserRegionList获取
+    //   - 不是目录树中的code（两者不同！）
+    //   - 用于getRegionsByDevTreeType接口的参数
+    let userRegionCode = '';
+    try {
+      const userRegionResponse = await sendVcpMessage('getUserRegionList', { userId: qiyezhuInfo.entUserId });
+      if (userRegionResponse && userRegionResponse.success && userRegionResponse.regionCode) {
+        userRegionCode = userRegionResponse.regionCode;
+      }
+    } catch (err) {
+      console.warn('获取用户区域编码失败:', err);
+      // regionCode为空时，设备查询可能失败，但不阻断流程
+    }
+    
+    // ========== 步骤4：根据设备码查询设备信息 ==========
+    // 接口：getRegionsByDevTreeType
+    // URL示例：https://vcp.21cn.com/vcpCamera/oper/custom/getRegionsByDevTreeType?deviceCode=xxx&regionCode=xxx&pageSize=1000
+    // 输入：设备码数组 [deviceCode1, deviceCode2, ...]
+    // 输出：
+    //   - deviceList: 成功查询到的设备列表 [{regionId, deviceCode, regionName, deviceName}]
+    //   - failedCodes: 查询失败的设备码数组（这些设备标记为"设备不存在"）
+    progressCallback(`正在查询 ${phone} [${dirGroup.targetDir}] 的设备信息...`);
+    const deviceCodes = dirGroup.devices.map(d => d.deviceCode);
+    const { deviceList, failedCodes } = await getDeviceInfoForCascade2(deviceCodes, userRegionCode);
+    
+    // 记录查询失败的设备（备注：设备不存在）
+    // 原因：设备可能已被删除、设备码错误、或无权限访问
+    for (const failedCode of failedCodes) {
+      results.deviceResults.push({
+        deviceCode: failedCode,
+        success: false,
+        message: '设备不存在'
+      });
+    }
+    
+    // 如果所有设备都查询失败，直接返回
+    if (deviceList.length === 0) {
+      results.success = false;
+      results.message = '所有设备查询失败';
+      return results;
+    }
+    
+    // ========== 步骤5：执行级联操作到对应的目标目录 ==========
+    // 参考功能：processCascadeBatches（批量处理级联）
+    // 接口：createCascadeTask（实际调用addCascadeTaskOperator）
+    // 关键参数说明：
+    //   - userId: 操作员ID（当前登录用户）
+    //   - account: 企业主手机号（被级联方）
+    //   - deviceList: 设备信息列表（步骤4查询到的）
+    //   - pRegionId: 目标目录ID（步骤2获取的）
+    //   - pRegionName: 目标目录名称（步骤2获取的）
+    // 执行效果：
+    //   - 将deviceList中的设备级联到pRegionId对应的目录下
+    //   - 企业主可以在其监控平台看到这些设备
+    progressCallback(`正在对 ${phone} [${dirGroup.targetDir}] 执行级联 (${deviceList.length}台设备)...`);
+    const response = await sendVcpMessage('createCascadeTask', {
+      userId: userId,
+      account: phone,
+      deviceList: deviceList,
+      pRegionId: regionInfo.id,       // 目标目录ID
+      pRegionName: regionInfo.name     // 目标目录名称
+    });
+    
+    if (response && response.success) {
+      const cascadeResults = response.cascadeResults || [];
+      for (const cr of cascadeResults) {
+        results.deviceResults.push({
+          deviceCode: cr.deviceCode,
+          success: cr.success,
+          message: cr.message
+        });
+      }
+      const successCount = results.deviceResults.filter(r => r.success).length;
+      results.success = successCount > 0;
+      results.message = `级联完成: ${successCount}/${results.deviceResults.length} 成功`;
+    } else {
+      results.success = false;
+      results.message = response?.error || '级联失败';
+      for (const device of deviceList) {
+        results.deviceResults.push({
+          deviceCode: device.deviceCode,
+          success: false,
+          message: response?.error || '级联失败'
+        });
+      }
+    }
+  } catch (err) {
+    results.success = false;
+    results.message = err.message;
+    for (const device of dirGroup.devices) {
+      results.deviceResults.push({
+        deviceCode: device.deviceCode,
+        success: false,
+        message: err.message
+      });
+    }
+  }
+  
+  return results;
+}
+
+/**
+ * 汇聚功能2 - 手机号级别处理：对单个手机号的所有目录组执行级联
+ * 
+ * 功能说明：
+ * 处理一个手机号下的所有目录组，是executeCascade2ForDirGroup的上层调用。
+ * 一个手机号可能对应多个目标目录（例如：测试目录、生产目录等）。
+ * 
+ * 执行流程：
+ * 1. 查询企业主信息（只查询一次，所有目录组共用）
+ * 2. 遍历该手机号的所有目录组
+ *    - 对每个目录组调用 executeCascade2ForDirGroup 进行处理
+ *    - 收集每个目录组的处理结果
+ * 3. 异常处理：如果企业主查询失败，为每个目录组的每台设备生成失败记录
+ * 
+ * 设计优化：
+ * - 企业主信息只查询一次，避免重复API调用
+ * - 每个目录组独立处理，互不影响
+ * - 异常时确保所有设备都有记录，不会丢失数据
+ * 
+ * @param {String} phone - 企业主手机号码
+ * @param {Object} phoneGroup - 手机号分组对象 { phone, dirGroups: { dirName: { targetDir, devices[] } } }
+ * @param {String} userId - 当前操作员ID
+ * @param {Function} progressCallback - 进度回调函数(msg) => void
+ * @returns {Array} 所有目录组的处理结果数组 [dirResult1, dirResult2, ...]
+ */
+async function executeCascade2ForPhone(phone, phoneGroup, userId, progressCallback) {
+  const allDirResults = [];
+  
+  try {
+    // ========== 步骤1：查询企业主信息（只查询一次）==========
+    // 目的：获取企业主的ID和剩余级联路数
+    // 优化：同一个手机号可能有多个目录组，企业主信息只需查询一次
+    // 所有目录组共享这个企业主信息对象
+    progressCallback(`正在查询 ${phone} 的企业主信息...`);
+    const qiyezhuInfo = await getCustomListForCascade2(phone);
+    
+    // ========== 步骤2：遍历该手机号的所有目录组 ==========
+    // 示例：手机号13800138000有2个目录组
+    //   - 目录组1: "测试目录" → [设备A, 设备B, 设备C]
+    //   - 目录组2: "生产目录" → [设备D, 设备E]
+    // 需要分别对每个目录组执行级联操作
+    const dirGroups = Object.values(phoneGroup.dirGroups);
+    for (let i = 0; i < dirGroups.length; i++) {
+      const dirGroup = dirGroups[i];
+      progressCallback(`正在处理 ${phone} [${dirGroup.targetDir}] (${i + 1}/${dirGroups.length})...`);
+      
+      // 调用核心处理函数，传入共享的qiyezhuInfo
+      const dirResult = await executeCascade2ForDirGroup(phone, dirGroup, qiyezhuInfo, userId, progressCallback);
+      allDirResults.push(dirResult);  // 收集每个目录组的结果
+    }
+    
+  } catch (err) {
+    // ========== 异常处理：企业主查询失败 ==========
+    // 场景：
+    //   - 手机号对应的用户不存在（未注册）
+    //   - API调用超时或网络错误
+    //   - 权限不足无法查询
+    // 处理策略：
+    //   - 不中断整个流程
+    //   - 为每个目录组的每台设备都生成失败记录
+    //   - 确保结果完整，方便后续统计和导出
+    
+    console.error(`手机号 ${phone} 查询企业主信息失败:`, err);
+    
+    const dirGroups = Object.values(phoneGroup.dirGroups);
+    
+    for (const dirGroup of dirGroups) {
+      const failResult = {
+        phone,
+        targetDir: dirGroup.targetDir,
+        success: false,
+        message: err.message || '企业主不存在或查询失败',
+        deviceResults: []
+      };
+      
+      // 为该目录下的每个设备都生成独立的失败记录
+      // 这样在结果表格中可以看到每台设备的具体情况
+      for (const device of dirGroup.devices) {
+        failResult.deviceResults.push({
+          deviceCode: device.deviceCode,
+          success: false,
+          message: err.message || '企业主不存在或查询失败'
+        });
+      }
+      
+      allDirResults.push(failResult);
+    }
+  }
+  
+  return allDirResults;
+}
+
+/**
+ * 汇聚功能2 - 主入口：启动批量级联处理流程
+ * 
+ * 功能说明：
+ * 这是汇聚功能2的主控制函数，负责协调整个级联流程。
+ * 
+ * 执行前检查：
+ * 1. 检查是否已上传CSV文件
+ * 2. 检查是否已获取当前用户ID
+ * 3. 统计总目录组数量并弹出确认框
+ * 
+ * 主循环逻辑：
+ * 遍历所有手机号 → 对每个手机号遍历其目录组 → 对每个目录组执行5步级联流程
+ * 
+ * 进度追踪：
+ * - 按"目录组"为单位统计进度（不是按手机号）
+ * - 实时更新进度条和状态文字
+ * - 支持取消操作（通过浏览器确认框）
+ * 
+ * 结果展示：
+ * 处理完成后显示详细的结果表格，包含：
+ * - 总体统计（成功/失败数量）
+ * - 每台设备的详细信息（手机号、目标目录、设备码、状态、原因）
+ * - 导出CSV功能
+ * 
+ * 触发方式：
+ * 用户点击"开始汇聚"按钮后调用此函数
+ */
+async function startCascade2() {
+  // ========== 前置检查 ==========
+  
+  // 检查1：是否已上传CSV文件
+  if (!cascade2GroupedData || Object.keys(cascade2GroupedData).length === 0) {
+    showStatus('请先上传Excel文件', true);
+    return;
+  }
+  
+  // 检查2：是否已获取当前用户ID（用于级联操作的operateAdminId参数）
+  if (!currentUserId) {
+    showStatus('请先获取用户信息', true);
+    return;
+  }
+  
+  // ========== 统计总目录组数量 ==========
+  // 统计所有手机号下的目录组总数
+  // 示例：3个手机号，每个有2个目录组 → totalDirGroups = 6
+  let totalDirGroups = 0;
+  for (const phone in cascade2GroupedData) {
+    totalDirGroups += Object.keys(cascade2GroupedData[phone].dirGroups).length;
+  }
+  
+  // ========== 用户确认 ==========
+  // 弹出确认框，显示将要处理的数量
+  // 用户可以选择"确定"继续或"取消"中止
+  const confirmMessage = `共 ${Object.keys(cascade2GroupedData).length} 个手机号码，${totalDirGroups} 个目录组需要处理，是否开始级联？`;
+  if (!confirm(confirmMessage)) {
+    showStatus('已取消级联操作');
+    return;
+  }
+  
+  // ========== 初始化进度条UI ==========
+  const progressContainer = document.getElementById('cascade2Progress');
+  progressContainer.classList.remove('hidden');  // 显示进度条容器
+  updateCascade2Progress(0, '正在初始化...');   // 初始化进度为0%
+  
+  // ========== 准备结果收集数组 ==========
+  const allResults = [];              // 存储所有处理结果
+  const phones = Object.keys(cascade2GroupedData);  // 所有待处理的手机号列表
+  let processedDirGroups = 0;         // 已处理的目录组计数器
+  
+  // ========== 主循环：遍历每个手机号 ==========
+  for (const phone of phones) {
+    const phoneGroup = cascade2GroupedData[phone];  // 获取该手机号的分组数据
+    
+    // 调用手机号处理函数，传入进度回调
+    // 该函数会：
+    //   1. 查询企业主信息
+    //   2. 遍历该手机号的所有目录组
+    //   3. 对每个目录组执行5步级联流程
+    //   4. 返回该手机号下所有目录组的处理结果数组
+    const dirResults = await executeCascade2ForPhone(phone, phoneGroup, currentUserId, (msg) => {
+      // 实时更新进度条（显示当前处理的详细信息）
+      updateCascade2Progress(
+        Math.round((processedDirGroups / totalDirGroups) * 100),  // 计算百分比
+        msg  // 显示的消息，如："正在查询 xxx 的企业主信息..."
+      );
+    });
+    
+    // ========== 收集该手机号的所有目录组结果 ==========
+    for (const dirResult of dirResults) {
+      allResults.push(dirResult);      // 将单个目录组的结果添加到总结果中
+      processedDirGroups++;             // 已处理计数+1
+      
+      // 更新总体进度（显示已完成多少个目录组）
+      updateCascade2Progress(
+        Math.round((processedDirGroups / totalDirGroups) * 100),
+        `已完成 ${processedDirGroups}/${totalDirGroups} 个目录组`
+      );
+    }
+  }
+  
+  // ========== 处理完成 ==========
+  updateCascade2Progress(100, '处理完成！');  // 进度设为100%
+  
+  // 调用结果显示函数，渲染结果表格
+  displayCascade2Results(allResults);
+  
+  // 2秒后自动隐藏进度条（给用户时间查看最终状态）
+  setTimeout(() => {
+    progressContainer.classList.add('hidden');
+  }, 2000);
+}
+
+// 汇聚功能2：显示处理结果
+function displayCascade2Results(allResults) {
+  let totalDevices = 0;
+  let totalSuccess = 0;
+  let totalFailed = 0;
+  
+  for (const result of allResults) {
+    for (const dr of result.deviceResults) {
+      totalDevices++;
+      if (dr.success) totalSuccess++;
+      else totalFailed++;
+    }
+  }
+  
+  let resultHtml = `
+    <div style="margin-bottom: 14px;">
+      <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px;">
+        <strong style="font-size: 11px; color: #1e293b; font-weight: 700; letter-spacing: -0.3px;">汇聚处理结果 (共${totalDevices}台设备):</strong>
+        <div style="display: flex; gap: 16px; font-size: 11px; font-weight: 600;">
+          <div style="color: #137333;">成功: ${totalSuccess}台</div>
+          <div style="color: #c5221f;">失败: ${totalFailed}台</div>
+        </div>
+      </div>
+      <button id="exportCascade2Btn" style="background: linear-gradient(135deg, #3b82f6 0%, #60a5fa 100%); color: white; border: none; padding: 8px 14px; border-radius: 10px; cursor: pointer; font-size: 10px; font-weight: 700; box-shadow: 0 4px 12px rgba(59, 130, 246, 0.25); letter-spacing: -0.2px; backdrop-filter: blur(10px); border: 1px solid rgba(255, 255, 255, 0.3); transition: all 0.25s ease;">📥 导出结果</button>
+    </div>
+    <div style="overflow-x: auto;">
+      <table class="data-table" style="margin-top: 8px; width: 100%; border-collapse: collapse; border-radius: 12px; overflow: hidden; box-shadow: 0 4px 16px rgba(0, 0, 0, 0.08); background: rgba(255, 255, 255, 0.8); backdrop-filter: blur(10px); border: 1px solid rgba(226, 232, 240, 0.5);">
+        <tr style="background: linear-gradient(135deg, rgba(248, 250, 252, 0.9) 0%, rgba(241, 245, 249, 0.9) 100%); border-bottom: 1px solid rgba(226, 232, 240, 0.5); backdrop-filter: blur(10px);">
+          <th style="padding: 12px 14px; text-align: left; border: 1px solid rgba(226, 232, 240, 0.5); font-weight: 700; font-size: 9px; color: #1e293b; letter-spacing: -0.2px; text-transform: uppercase; width: 40px;">序号</th>
+          <th style="padding: 12px 14px; text-align: left; border: 1px solid rgba(226, 232, 240, 0.5); font-weight: 700; font-size: 9px; color: #1e293b; letter-spacing: -0.2px; text-transform: uppercase;">手机号码</th>
+          <th style="padding: 12px 14px; text-align: left; border: 1px solid rgba(226, 232, 240, 0.5); font-weight: 700; font-size: 9px; color: #1e293b; letter-spacing: -0.2px; text-transform: uppercase;">目标目录</th>
+          <th style="padding: 12px 14px; text-align: left; border: 1px solid rgba(226, 232, 240, 0.5); font-weight: 700; font-size: 9px; color: #1e293b; letter-spacing: -0.2px; text-transform: uppercase;">设备编码</th>
+          <th style="padding: 12px 14px; text-align: left; border: 1px solid rgba(226, 232, 240, 0.5); font-weight: 700; font-size: 9px; color: #1e293b; letter-spacing: -0.2px; text-transform: uppercase;">级联状态</th>
+          <th style="padding: 12px 14px; text-align: left; border: 1px solid rgba(226, 232, 240, 0.5); font-weight: 700; font-size: 9px; color: #1e293b; letter-spacing: -0.2px; text-transform: uppercase;">状态信息</th>
+        </tr>
+  `;
+  
+  let index = 1;
+  for (const result of allResults) {
+    for (const dr of result.deviceResults) {
+      resultHtml += `
+        <tr style="border-bottom: 1px solid rgba(226, 232, 240, 0.5); transition: all 0.2s ease; font-size: 10px; background: ${dr.success ? 'rgba(16, 185, 129, 0.05)' : 'rgba(239, 68, 68, 0.05)'}" onmouseover="this.style.background='rgba(59, 130, 246, 0.05)'" onmouseout="this.style.background='${dr.success ? 'rgba(16, 185, 129, 0.05)' : 'rgba(239, 68, 68, 0.05)'}">
+          <td style="padding: 12px 14px; border: 1px solid rgba(226, 232, 240, 0.5); color: #475569; font-weight: 500; text-align: center; width: 40px;">${index++}</td>
+          <td style="padding: 12px 14px; border: 1px solid rgba(226, 232, 240, 0.5); color: #1e293b; font-weight: 600; font-size: 10px;">${result.phone}</td>
+          <td style="padding: 12px 14px; border: 1px solid rgba(226, 232, 240, 0.5); color: #059669; font-weight: 600; font-size: 10px;">${result.targetDir || '-'}</td>
+          <td style="padding: 12px 14px; border: 1px solid rgba(226, 232, 240, 0.5); color: #475569; font-family: 'SF Mono', monospace; font-size: 9px;">${dr.deviceCode || '-'}</td>
+          <td style="padding: 12px 14px; border: 1px solid rgba(226, 232, 240, 0.5); color: ${dr.success ? '#137333' : '#c5221f'}; font-weight: 600;">${dr.success ? '成功' : '失败'}</td>
+          <td style="padding: 12px 14px; border: 1px solid rgba(226, 232, 240, 0.5); color: #475569; font-size: 10px;">${dr.message || '-'}</td>
+        </tr>
+      `;
+    }
+  }
+  
+  resultHtml += '</table></div>';
+  
+  document.getElementById('cascade2ResultContent').innerHTML = resultHtml;
+  document.getElementById('cascade2Result').style.display = 'block';
+  
+  // 添加导出按钮事件
+  const exportBtn = document.getElementById('exportCascade2Btn');
+  if (exportBtn) {
+    exportBtn.addEventListener('click', () => {
+      exportCascade2Result(allResults);
+    });
+  }
+  
+  if (totalFailed === 0) {
+    showStatus(`汇聚处理完成，全部${totalSuccess}台设备成功！`, false);
+  } else if (totalSuccess > 0) {
+    showStatus(`汇聚处理完成，${totalSuccess}台成功，${totalFailed}台失败`, true);
+  } else {
+    showStatus(`汇聚处理失败，全部${totalDevices}台设备失败`, true);
+  }
+}
+
+// 汇聚功能2：导出结果
+function exportCascade2Result(allResults) {
+  if (!allResults || allResults.length === 0) {
+    showStatus('没有可导出的数据', true);
+    return;
+  }
+  
+  const headers = '序号,手机号码,目标目录,设备编码,级联状态,状态信息';
+  const rows = [];
+  let index = 1;
+  
+  for (const result of allResults) {
+    for (const dr of result.deviceResults) {
+      rows.push(`${index++},${result.phone},"${result.targetDir || '-'}",${dr.deviceCode || '-'},${dr.success ? '成功' : '失败'},"${dr.message || '-'}"`);
+    }
+  }
+  
+  exportToCSV('汇聚功能2结果', headers, rows);
+}
+
+// 汇聚功能2：清除数据
+function clearCascade2Data() {
+  document.getElementById('excelFileCascade2').value = '';
+  
+  const uploadFileGroup = document.getElementById('dropZoneCascade2').closest('.input-group');
+  if (uploadFileGroup) uploadFileGroup.style.display = 'block';
+  
+  document.getElementById('uploadStatsCascade2').style.display = 'none';
+  document.getElementById('cascade2GroupResult').style.display = 'none';
+  document.getElementById('cascade2Result').style.display = 'none';
+  document.getElementById('cascade2Progress').classList.add('hidden');
+  
+  document.getElementById('uploadStatsContentCascade2').textContent = '-';
+  document.getElementById('cascade2GroupContent').textContent = '-';
+  document.getElementById('cascade2ResultContent').textContent = '-';
+  
+  updateCascade2Progress(0, '正在初始化...');
+  
+  cascade2Data = null;
+  cascade2GroupedData = null;
+  
+  showStatus('汇聚功能2数据已清除', false);
+}
+
+// 汇聚功能2事件监听
+document.getElementById('startCascade2Btn').addEventListener('click', startCascade2);
+document.getElementById('clearCascade2DataBtn').addEventListener('click', clearCascade2Data);
+
+// 汇聚功能2拖放上传
+setupDropZone({
+  dropZoneId: 'dropZoneCascade2',
+  fileInputId: 'excelFileCascade2',
+  processFn: processCascade2CSVFile
+});
+
+// 汇聚功能2下载模板
+document.getElementById('downloadTemplateCascade2').addEventListener('click', (e) => {
+  e.preventDefault();
+  downloadCascade2Template();
+});

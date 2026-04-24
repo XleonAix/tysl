@@ -196,7 +196,7 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
   }
 
   if (request.action === 'getRegionsByDevTreeType') {
-    const { deviceCodes } = request;
+    const { deviceCodes, deviceCode: singleDeviceCode, regionCode: requestRegionCode, pageSize: requestPageSize } = request;
     const url = 'https://vcp.21cn.com/vcpCamera/oper/custom/getRegionsByDevTreeType';
     const deviceList = [];
     const batchSize = 5;
@@ -221,8 +221,8 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
         const batchPromises = batch.map(deviceCode => {
           const params = new URLSearchParams({
             deviceCode: deviceCode,
-            regionCode: regionCode_ || '',
-            pageSize: '1000'
+            regionCode: requestRegionCode || regionCode_ || '',
+            pageSize: requestPageSize || '1000'
           });
 
           return vcpGet(url, params)
@@ -264,7 +264,7 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
   }
 
   if (request.action === 'createCascadeTask') {
-    const { userId, account, deviceList } = request;
+    const { userId, account, deviceList, pRegionId: requestPRegionId, pRegionName: requestPRegionName } = request;
     const url = 'https://vcp.21cn.com/vcpCamera/cascade/addCascadeTaskOperator';
 
     if (!cascadeCode) {
@@ -309,6 +309,10 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
       for (let i = 0; i < deviceList.length; i += batchSize) {
         const batch = deviceList.slice(i, i + batchSize);
 
+        // 使用传入的目标目录参数，如果没有则使用全局默认值
+        const targetRegionId = requestPRegionId || selectedRegionId || '';
+        const targetRegionName = requestPRegionName || selectedRegionName || '';
+
         const taskData = {
           livePer: '1',
           backSeePer: '1',
@@ -325,8 +329,8 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
           operateAdminId: userId,
           packageStrategy: 2,
           customAccount: account,
-          pRegionId: selectedRegionId || '',
-          pRegionName: selectedRegionName || '',
+          pRegionId: targetRegionId,
+          pRegionName: targetRegionName,
           regionCode: regionCode_ || ''
         };
 

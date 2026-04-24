@@ -532,11 +532,12 @@
     
     <div class="tab-container">
       <button class="tab-btn active" data-tab="userInfo">用户信息</button>
-      <button class="tab-btn" data-tab="batchCascade">批量级联功能</button>
+      <button class="tab-btn" data-tab="batchCascade">批量级联-1</button>
       <button class="tab-btn" data-tab="batchQuery">批量设备查询</button>
       <button class="tab-btn" data-tab="deviceList">设备清单查询</button>
       <button class="tab-btn" data-tab="regionAdjust">监控目录调整</button>
       <button class="tab-btn" data-tab="qualityMonitor">画质监测</button>
+      <button class="tab-btn" data-tab="cascade2">批量级联-2</button>
     </div>
   </div>
   
@@ -643,6 +644,54 @@
     <div id="cascadeTaskResult" class="result-box hidden">
       <div class="result-label">级联任务结果:</div>
       <div id="cascadeTask" class="content-box">-</div>
+    </div>
+  </div>
+
+  <!-- 汇聚功能2页面 -->
+  <div id="cascade2" class="page">
+    <div class="input-group">
+      <label>上传Excel文件 (设备编码、汇聚手机号码、目标目录):</label>
+      <div id="dropZoneCascade2" style="border: 2px dashed #ddd; border-radius: 4px; padding: 20px; text-align: center; margin: 10px 0; background: #f9f9f9; cursor: pointer;">
+        <p>📁 拖放Excel文件到此处</p>
+        <p style="font-size: 10px; color: #999; margin-top: 5px;">或点击选择文件</p>
+        <input type="file" id="excelFileCascade2" accept=".csv" style="display: none;">
+      </div>
+      <div style="text-align: center; margin-top: 5px;">
+        <a href="#" id="downloadTemplateCascade2" style="font-size: 10px; color: #4285f4; text-decoration: none;">📄 下载CSV模板</a>
+      </div>
+    </div>
+    
+    <div id="uploadStatsCascade2" class="result-box hidden">
+      <div class="result-label">文件上传统计:</div>
+      <div id="uploadStatsContentCascade2" class="content-box">-</div>
+    </div>
+    
+    <div id="cascade2GroupResult" class="result-box hidden">
+      <div class="result-label">手机号码分组预览:</div>
+      <div id="cascade2GroupContent" class="content-box" style="max-height: 150px; overflow-y: auto;">-</div>
+    </div>
+    
+    <div style="display: flex; gap: 8px; margin-top: 10px;">
+      <button id="startCascade2Btn" class="refresh-btn" style="flex: 1;">🚀 开始汇聚处理</button>
+      <button id="clearCascade2DataBtn" class="refresh-btn" style="flex: 1; background: linear-gradient(135deg, #ef4444 0%, #dc2626 100%);">🗑️ 清除数据</button>
+    </div>
+    
+    <div id="cascade2Progress" class="progress-container hidden">
+      <div class="progress-label">
+        <span>📊 汇聚进度</span>
+        <div style="display: flex; align-items: center; gap: 8px;">
+          <span id="cascade2ProgressPercent">0%</span>
+        </div>
+      </div>
+      <div class="progress-bar">
+        <div id="cascade2ProgressFill" class="progress-fill"></div>
+      </div>
+      <div id="cascade2ProgressText" class="progress-text">正在初始化...</div>
+    </div>
+    
+    <div id="cascade2Result" class="result-box hidden">
+      <div class="result-label">汇聚处理结果:</div>
+      <div id="cascade2ResultContent" class="content-box" style="max-height: 200px; overflow-y: auto;">-</div>
     </div>
   </div>
   
