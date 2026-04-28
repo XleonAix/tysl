@@ -1,7 +1,7 @@
 {
   "manifest_version": 3,
   "name": "天翼视联助手",
-  "version": "3.0.1",
+  "version": "5.0.1",
   "description": "天翼视联助手 - 依托监控平台打造的扩展功能",
   "permissions": [
     "storage",

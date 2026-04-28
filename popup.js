@@ -1,11 +1,8 @@
 function showStatus(message, isError = false) {
   const statusEl = document.getElementById('status');
   statusEl.innerHTML = message;
+  statusEl.style.display = 'flex';
   statusEl.className = 'status ' + (isError ? 'error' : 'success');
-  statusEl.classList.remove('hidden');
-  setTimeout(() => {
-    statusEl.classList.add('hidden');
-  }, 3000);
 }
 
 function updateProgress(percent, text) {
@@ -22,6 +19,131 @@ function updateProgress(percent, text) {
   if (progressText) {
     progressText.textContent = text;
   }
+}
+
+function updateAccountDisplays(accountText) {
+  const mainAccountDisplay = document.getElementById('accountDisplay');
+  const sidebarAccountDisplay = document.getElementById('sidebarAccountDisplay');
+
+  if (mainAccountDisplay) {
+    mainAccountDisplay.textContent = accountText;
+  }
+  if (sidebarAccountDisplay) {
+    sidebarAccountDisplay.textContent = accountText;
+  }
+}
+
+function renderDeviceListProgressStatus(percent, text, showStop = true) {
+  const statusEl = document.getElementById('status');
+  const safePercent = Math.max(0, Math.min(100, Math.round(percent)));
+  statusEl.className = 'status info';
+  statusEl.style.display = 'flex';
+  statusEl.innerHTML = `
+    <div class="status-progress">
+      <div class="status-progress-header">
+        <div class="status-progress-meta">
+          <span class="status-progress-title">查询进度</span>
+          <span id="deviceListStatusPercent" class="status-progress-percent">${safePercent}%</span>
+        </div>
+        ${showStop ? '<button id="deviceListStatusStopBtn" class="stop-btn" style="display: inline-block;">❌ 停止</button>' : ''}
+      </div>
+      <div class="status-progress-bar">
+        <div id="deviceListStatusFill" class="status-progress-fill" style="width: ${safePercent}%;"></div>
+      </div>
+      <div id="deviceListStatusText" class="status-progress-text">${text}</div>
+    </div>
+  `;
+}
+
+function updateDeviceListProgressStatus(percent, text) {
+  const progressFill = document.getElementById('deviceListStatusFill');
+  const progressPercent = document.getElementById('deviceListStatusPercent');
+  const progressText = document.getElementById('deviceListStatusText');
+  const safePercent = Math.max(0, Math.min(100, Math.round(percent)));
+
+  if (progressFill && progressPercent && progressText) {
+    progressFill.style.width = `${safePercent}%`;
+    progressPercent.textContent = `${safePercent}%`;
+    progressText.textContent = text;
+    return;
+  }
+
+  renderDeviceListProgressStatus(safePercent, text, true);
+}
+
+function renderDeviceStatusProgressStatus(percent, text, showStop = true) {
+  const statusEl = document.getElementById('status');
+  const safePercent = Math.max(0, Math.min(100, Math.round(percent)));
+  statusEl.className = 'status info';
+  statusEl.style.display = 'flex';
+  statusEl.innerHTML = `
+    <div class="status-progress">
+      <div class="status-progress-header">
+        <div class="status-progress-meta">
+          <span class="status-progress-title">查询进度</span>
+          <span id="deviceStatusTopPercent" class="status-progress-percent">${safePercent}%</span>
+        </div>
+        ${showStop ? '<button id="deviceStatusTopStopBtn" class="stop-btn" style="display: inline-block;">❌ 停止</button>' : ''}
+      </div>
+      <div class="status-progress-bar">
+        <div id="deviceStatusTopFill" class="status-progress-fill" style="width: ${safePercent}%;"></div>
+      </div>
+      <div id="deviceStatusTopText" class="status-progress-text">${text}</div>
+    </div>
+  `;
+}
+
+function updateDeviceStatusProgressStatus(percent, text) {
+  const progressFill = document.getElementById('deviceStatusTopFill');
+  const progressPercent = document.getElementById('deviceStatusTopPercent');
+  const progressText = document.getElementById('deviceStatusTopText');
+  const safePercent = Math.max(0, Math.min(100, Math.round(percent)));
+
+  if (progressFill && progressPercent && progressText) {
+    progressFill.style.width = `${safePercent}%`;
+    progressPercent.textContent = `${safePercent}%`;
+    progressText.textContent = text;
+    return;
+  }
+
+  renderDeviceStatusProgressStatus(safePercent, text, true);
+}
+
+function renderCascadeProgressStatus(percent, text) {
+  const statusEl = document.getElementById('status');
+  const safePercent = Math.max(0, Math.min(100, Math.round(percent)));
+  statusEl.className = 'status info';
+  statusEl.style.display = 'flex';
+  statusEl.innerHTML = `
+    <div class="status-progress">
+      <div class="status-progress-header">
+        <div class="status-progress-meta">
+          <span class="status-progress-title">级联进度</span>
+          <span id="cascadeTopPercent" class="status-progress-percent">${safePercent}%</span>
+        </div>
+      </div>
+      <div class="status-progress-bar">
+        <div id="cascadeTopFill" class="status-progress-fill" style="width: ${safePercent}%;"></div>
+      </div>
+      <div id="cascadeTopText" class="status-progress-text">${text}</div>
+    </div>
+  `;
+}
+
+function updateCascadeProgressStatus(percent, text) {
+  const progressFill = document.getElementById('cascadeTopFill');
+  const progressPercent = document.getElementById('cascadeTopPercent');
+  const progressText = document.getElementById('cascadeTopText');
+  const safePercent = Math.max(0, Math.min(100, Math.round(percent)));
+
+  if (progressFill && progressPercent && progressText) {
+    progressFill.style.width = `${safePercent}%`;
+    progressPercent.textContent = `${safePercent}%`;
+    progressText.textContent = text;
+    return;
+  }
+
+  renderCascadeProgressStatus(safePercent, text);
 }
 
 // 全局变量：是否停止查询
@@ -277,7 +399,7 @@ async function getLevelCusRegion() {
       
       if (regionData && regionData.data && regionData.data.cusRegionList) {
         const regionList = regionData.data.cusRegionList;
-        const regionHtml = renderRegionTree(regionList);
+        const regionHtml = renderRegionTree(regionList, 0, { context: 'cascade' });
         
         document.getElementById('levelCusRegionResult').style.display = 'block';
         document.getElementById('levelCusRegion').innerHTML = regionHtml;
@@ -307,7 +429,8 @@ async function getLevelCusRegion() {
   }
 }
 
-function renderRegionTree(regionList, level = 0) {
+function renderRegionTree(regionList, level = 0, options = {}) {
+  const { context = '', showGbCodeAction = false } = options;
   if (!regionList || regionList.length === 0) {
     return '<div class="no-data">暂无数据</div>';
   }
@@ -318,9 +441,12 @@ function renderRegionTree(regionList, level = 0) {
     const indent = level * 20;
     const hasChild = item.hasChild === 1 || item.hasChild === '1' || item.hasChild === true;
     const toggleIcon = hasChild ? '▶' : '•';
+    const gbCodeButtonHtml = showGbCodeAction
+      ? `<button class="gbcode-region-btn" data-id="${item.id}" data-name="${item.name || ''}" style="background: linear-gradient(135deg, #8b5cf6 0%, #7c3aed 100%); color: white; border: none; padding: 4px 8px; border-radius: 4px; cursor: pointer; font-size: 11px; font-weight: 700; box-shadow: 0 2px 6px rgba(124, 58, 237, 0.25); border: 1px solid rgba(255, 255, 255, 0.3);">码</button>`
+      : '';
     
     html += `
-      <li class="region-item" style="padding-left: ${indent}px; display: flex; align-items: center; justify-content: space-between;" data-id="${item.id}" data-name="${item.name || ''}" data-has-child="${hasChild}">
+      <li class="region-item" style="padding-left: ${indent}px; display: flex; align-items: center; justify-content: space-between;" data-id="${item.id}" data-name="${item.name || ''}" data-has-child="${hasChild}" data-context="${context}">
         <div style="display: flex; align-items: center; gap: 8px;">
           <span class="region-toggle">${toggleIcon}</span>
           <input type="radio" name="region-radio" class="region-radio" data-id="${item.id}" data-name="${item.name || ''}">
@@ -329,6 +455,7 @@ function renderRegionTree(regionList, level = 0) {
           <span class="region-device-count" style="font-size: 10px; color: #64748b; font-weight: 500;">(${item.onlineCount || 0}/${item.deviceCount || 0})</span>
         </div>
         <div style="display: flex; gap: 4px;">
+          ${gbCodeButtonHtml}
           <button class="add-subregion-btn" data-id="${item.id}" style="background: linear-gradient(135deg, #10b981 0%, #059669 100%); color: white; border: none; padding: 4px 8px; border-radius: 4px; cursor: pointer; font-size: 12px; font-weight: bold; box-shadow: 0 2px 6px rgba(16, 185, 129, 0.25); border: 1px solid rgba(255, 255, 255, 0.3);">+</button>
           <button class="edit-region-btn" data-id="${item.id}" data-name="${item.name || ''}" style="background: linear-gradient(135deg, #3b82f6 0%, #60a5fa 100%); color: white; border: none; padding: 4px 8px; border-radius: 4px; cursor: pointer; font-size: 12px; font-weight: bold; box-shadow: 0 2px 6px rgba(59, 130, 246, 0.25); border: 1px solid rgba(255, 255, 255, 0.3);">✏️</button>
           <button class="delete-region-btn" data-id="${item.id}" style="background: linear-gradient(135deg, #ef4444 0%, #dc2626 100%); color: white; border: none; padding: 4px 8px; border-radius: 4px; cursor: pointer; font-size: 12px; font-weight: bold; box-shadow: 0 2px 6px rgba(239, 68, 68, 0.25); border: 1px solid rgba(255, 255, 255, 0.3);">✕</button>
@@ -337,7 +464,7 @@ function renderRegionTree(regionList, level = 0) {
     `;
     
     if (hasChild && item.children && item.children.length > 0) {
-      html += renderRegionTree(item.children, level + 1);
+      html += renderRegionTree(item.children, level + 1, options);
     }
   });
   
@@ -351,6 +478,7 @@ function addRegionClickHandlers() {
     const radio = item.querySelector('.region-radio');
     const editBtn = item.querySelector('.edit-region-btn');
     const deleteBtn = item.querySelector('.delete-region-btn');
+    const gbCodeBtn = item.querySelector('.gbcode-region-btn');
     const hasChild = item.getAttribute('data-has-child') === 'true';
     
     toggle.addEventListener('click', async (e) => {
@@ -377,7 +505,15 @@ function addRegionClickHandlers() {
           if (!response) { toggle.textContent = '▶'; return; }
           
           if (response.success && response.data && response.data.data && response.data.data.cusRegionList) {
-            const childHtml = renderRegionTree(response.data.data.cusRegionList, parseInt(item.style.paddingLeft || 0) / 20 + 1);
+            const itemContext = item.getAttribute('data-context') || '';
+            const childHtml = renderRegionTree(
+              response.data.data.cusRegionList,
+              parseInt(item.style.paddingLeft || 0) / 20 + 1,
+              {
+                context: itemContext,
+                showGbCodeAction: itemContext === 'regionAdjust'
+              }
+            );
             
             const tempDiv = document.createElement('div');
             tempDiv.innerHTML = childHtml;
@@ -496,6 +632,72 @@ function addRegionClickHandlers() {
             console.error('删除目录失败:', err);
             showStatus('删除目录失败: ' + err.message, true);
           }
+        }
+      });
+    }
+
+    if (gbCodeBtn) {
+      gbCodeBtn.addEventListener('click', async (e) => {
+        e.stopPropagation();
+
+        if (!currentUserId || !currentAccount || !currentEntUserId) {
+          showStatus('请先查询企业主并获取目录列表', true);
+          return;
+        }
+
+        const regionId = gbCodeBtn.getAttribute('data-id');
+        const regionName = gbCodeBtn.getAttribute('data-name') || '当前目录';
+        let currentGbCode = '';
+
+        try {
+          const currentCodeResponse = await sendVcpMessage('getGBCodeByUserId', {
+            userId: currentUserId,
+            account: currentAccount,
+            regionId: regionId
+          }, false);
+
+          if (currentCodeResponse && currentCodeResponse.success) {
+            const responseData = currentCodeResponse.data?.data;
+            currentGbCode =
+              responseData?.code ||
+              responseData?.gbCode ||
+              responseData?.catalogCode ||
+              responseData?.gbcode ||
+              '';
+          }
+        } catch (err) {
+          console.error('获取目录编码失败:', err);
+        }
+
+        const code = prompt(`请输入 ${regionName} 的目录编码（20个字符）:`, currentGbCode);
+
+        if (code === null) return;
+
+        const trimmedCode = code.trim();
+        if (trimmedCode.length !== 20) {
+          showStatus('目录编码长度必须为20个字符', true);
+          return;
+        }
+
+        try {
+          const response = await sendVcpMessage('saveGBCode', {
+            userId: currentUserId,
+            account: currentAccount,
+            type: 0,
+            code: trimmedCode,
+            regionId: regionId,
+            entUserId: currentEntUserId
+          }, false);
+          if (!response) return;
+
+          if (response.success) {
+            showStatus('目录编码保存成功');
+          } else {
+            showStatus('目录编码保存失败: ' + response.error, true);
+          }
+        } catch (err) {
+          console.error('目录编码保存失败:', err);
+          showStatus('目录编码保存失败: ' + err.message, true);
         }
       });
     }
@@ -638,18 +840,13 @@ async function createCascadeTask() {
       uploadStats.style.display = 'none';
     }
     
-    // 显示进度条
-    const progressContainer = document.getElementById('progressContainer');
-    if (progressContainer) {
-      progressContainer.style.display = 'block';
-    }
-    updateProgress(0, '正在初始化...');
+    renderCascadeProgressStatus(0, '正在初始化...');
     
     // 监听进度更新
     const progressUpdateListener = (message) => {
       if (message.action === 'cascadeProgress') {
         const { progress, current, total, deviceCode, step } = message;
-        updateProgress(progress, `${step}: 处理设备 ${current}/${total}: ${deviceCode}`);
+        updateCascadeProgressStatus(progress, `${step}: 处理设备 ${current}/${total}: ${deviceCode}`);
       }
     };
     
@@ -663,10 +860,6 @@ async function createCascadeTask() {
     
     if (!deviceResponse.success) {
       showStatus('获取设备信息失败: ' + deviceResponse.error, true);
-      // 隐藏进度条
-      if (progressContainer) {
-        progressContainer.style.display = 'none';
-      }
       // 移除进度更新监听器
       chrome.runtime.onMessage.removeListener(progressUpdateListener);
       return;
@@ -681,10 +874,6 @@ async function createCascadeTask() {
     
     if (deviceList.length === 0) {
       showStatus('所有设备获取失败，请检查设备编码', true);
-      // 隐藏进度条
-      if (progressContainer) {
-        progressContainer.style.display = 'none';
-      }
       // 移除进度更新监听器
       chrome.runtime.onMessage.removeListener(progressUpdateListener);
       return;
@@ -695,10 +884,6 @@ async function createCascadeTask() {
     
     if (!confirm(confirmMessage)) {
       showStatus('级联操作已取消', false);
-      // 隐藏进度条
-      if (progressContainer) {
-        progressContainer.style.display = 'none';
-      }
       // 移除进度更新监听器
       chrome.runtime.onMessage.removeListener(progressUpdateListener);
       return;
@@ -772,18 +957,19 @@ async function createCascadeTask() {
     
     // 生成表格形式的报告内容
     let reportContent = `
-      <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px;">
-        <div style="display: flex; align-items: center; gap: 12px;">
-          <strong style="font-size: 11px; color: #1e293b; font-weight: 700; letter-spacing: -0.3px;">级联任务结果 (共${totalCount}台):</strong>
-          <div style="display: flex; gap: 16px; font-size: 11px; font-weight: 600;">
+      <div class="cascade-task-panel" style="padding: 16px; background: rgba(255, 255, 255, 0.7); border-radius: 16px; box-shadow: 0 4px 16px rgba(0, 0, 0, 0.08); backdrop-filter: blur(20px); border: 1px solid rgba(255, 255, 255, 0.5); transition: all 0.3s ease;">
+        <div class="cascade-task-header">
+          <div class="cascade-task-summary">
+            <strong style="font-size: 11px; color: #1e293b; font-weight: 700; letter-spacing: -0.3px;">级联任务结果 (共${totalCount}台):</strong>
+            <div class="cascade-task-counts">
             <div style="color: #137333;">成功: ${successCount}台</div>
             <div style="color: #c5221f;">失败: ${failedCount}台</div>
           </div>
+          </div>
+          <button id="exportCascadeBtn" style="background: linear-gradient(135deg, #3b82f6 0%, #60a5fa 100%); color: white; border: none; padding: 8px 14px; border-radius: 10px; cursor: pointer; font-size: 10px; font-weight: 700; box-shadow: 0 4px 12px rgba(59, 130, 246, 0.25); letter-spacing: -0.2px; backdrop-filter: blur(10px); border: 1px solid rgba(255, 255, 255, 0.3); transition: all 0.25s ease;">📥 导出清单</button>
         </div>
-        <button id="exportCascadeBtn" style="background: linear-gradient(135deg, #3b82f6 0%, #60a5fa 100%); color: white; border: none; padding: 8px 14px; border-radius: 10px; cursor: pointer; font-size: 10px; font-weight: 700; box-shadow: 0 4px 12px rgba(59, 130, 246, 0.25); letter-spacing: -0.2px; backdrop-filter: blur(10px); border: 1px solid rgba(255, 255, 255, 0.3); transition: all 0.25s ease;">📥 导出清单</button>
-      </div>
-      <div style="overflow-x: auto;">
-        <table class="data-table" style="margin-top: 8px; width: 100%; border-collapse: collapse; border-radius: 12px; overflow: hidden; box-shadow: 0 4px 16px rgba(0, 0, 0, 0.08); background: rgba(255, 255, 255, 0.8); backdrop-filter: blur(10px); border: 1px solid rgba(226, 232, 240, 0.5);">
+      <div class="cascade-task-table-wrap">
+        <table class="data-table" style="margin-top: 0; width: 100%; border-collapse: collapse; border-radius: 12px; overflow: hidden; box-shadow: 0 4px 16px rgba(0, 0, 0, 0.08); background: rgba(255, 255, 255, 0.8); backdrop-filter: blur(10px); border: 1px solid rgba(226, 232, 240, 0.5);">
           <tr style="background: linear-gradient(135deg, rgba(248, 250, 252, 0.9) 0%, rgba(241, 245, 249, 0.9) 100%); border-bottom: 1px solid rgba(226, 232, 240, 0.5); backdrop-filter: blur(10px);">
             <th style="padding: 12px 14px; text-align: left; border: 1px solid rgba(226, 232, 240, 0.5); font-weight: 700; font-size: 9px; color: #1e293b; letter-spacing: -0.2px; text-transform: uppercase; width: 40px;">序号</th>
             <th style="padding: 12px 14px; text-align: left; border: 1px solid rgba(226, 232, 240, 0.5); font-weight: 700; font-size: 9px; color: #1e293b; letter-spacing: -0.2px; text-transform: uppercase;">设备UID</th>
@@ -804,11 +990,12 @@ async function createCascadeTask() {
           `).join('')}
         </table>
       </div>
+      </div>
     `;
     
     // 显示报告
     document.getElementById('cascadeTask').innerHTML = reportContent;
-    document.getElementById('cascadeTaskResult').style.display = 'block';
+    document.getElementById('cascadeTaskResult').classList.add('is-visible');
     
     // 添加导出按钮事件监听器
     const exportBtn = document.getElementById('exportCascadeBtn');
@@ -818,20 +1005,12 @@ async function createCascadeTask() {
       });
     }
     
-    // 隐藏进度条
-    if (progressContainer) {
-      progressContainer.style.display = 'none';
-    }
+    showStatus(`级联完成，结果已生成，共 ${totalCount} 台设备`, successCount === 0);
     // 移除进度更新监听器
     chrome.runtime.onMessage.removeListener(progressUpdateListener);
   } catch (err) {
     console.error('创建级联任务失败:', err);
     showStatus('创建级联任务失败: ' + err.message, true);
-    // 隐藏进度条
-    const progressContainer = document.getElementById('progressContainer');
-    if (progressContainer) {
-      progressContainer.style.display = 'none';
-    }
     // 移除进度更新监听器
     chrome.runtime.onMessage.removeListener((message) => {
       if (message.action === 'cascadeProgress') {
@@ -911,15 +1090,6 @@ document.getElementById('addRootRegionBtn').addEventListener('click', async func
     showStatus('添加根目录失败: ' + err.message, true);
   }
 });
-
-// 停止查询按钮
-if (document.getElementById('stopQueryBtn')) {
-  document.getElementById('stopQueryBtn').addEventListener('click', function() {
-    shouldStopQuery = true;
-    showStatus('正在停止查询...', false);
-    updateProgress(0, '正在停止查询...');
-  });
-}
 
 // 拖放上传功能
 setupDropZone({
@@ -1039,40 +1209,30 @@ async function queryDeviceStatus() {
       return;
     }
     
-    // 显示进度条
-    const progressContainer = document.getElementById('deviceStatusProgress');
-    const progressFill = document.getElementById('deviceStatusProgressFill');
-    const progressPercent = document.getElementById('deviceStatusProgressPercent');
-    const progressText = document.getElementById('deviceStatusProgressText');
-    const stopBtn = document.getElementById('stopDeviceStatusQueryBtn');
-    
-    progressContainer.classList.remove('hidden');
-    progressFill.style.width = '0%';
-    progressPercent.textContent = '0%';
-    progressText.textContent = '正在初始化...';
-    stopBtn.style.display = 'inline-block';
-    
     // 创建中止控制器
     deviceStatusQueryAbortController = new AbortController();
-    
-    // 停止按钮事件
-    stopBtn.onclick = () => {
-      if (deviceStatusQueryAbortController) {
-        deviceStatusQueryAbortController.abort();
-        showStatus('查询已停止', true);
-        progressContainer.classList.add('hidden');
-        stopBtn.style.display = 'none';
+
+    const bindDeviceStatusStop = () => {
+      const stopBtn = document.getElementById('deviceStatusTopStopBtn');
+      if (stopBtn) {
+        stopBtn.onclick = () => {
+          if (deviceStatusQueryAbortController) {
+            deviceStatusQueryAbortController.abort();
+            renderDeviceStatusProgressStatus(0, '查询已停止', false);
+          }
+        };
       }
     };
-    
+
+    renderDeviceStatusProgressStatus(0, '正在初始化...', true);
+    bindDeviceStatusStop();
     
     // 监听进度更新
     const progressUpdateListener = (message) => {
       if (message.action === 'deviceStatusProgress') {
         const { progress, current, total, deviceCode } = message;
-        progressFill.style.width = `${progress}%`;
-        progressPercent.textContent = `${progress}%`;
-        progressText.textContent = `正在查询设备 ${current}/${total}: ${deviceCode}`;
+        updateDeviceStatusProgressStatus(progress, `正在查询设备 ${current}/${total}: ${deviceCode}`);
+        bindDeviceStatusStop();
       }
     };
     
@@ -1098,19 +1258,19 @@ async function queryDeviceStatus() {
       
       // 显示查询结果
       const resultHtml = deviceStatusList.length > 0 ? `
-        <div style="margin-bottom: 14px; padding: 16px; background: rgba(255, 255, 255, 0.7); border-radius: 16px; box-shadow: 0 4px 16px rgba(0, 0, 0, 0.08); backdrop-filter: blur(20px); border: 1px solid rgba(255, 255, 255, 0.5); transition: all 0.3s ease;">
-          <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px;">
-            <div style="display: flex; align-items: center; gap: 12px;">
+        <div class="device-status-panel" style="padding: 16px; background: rgba(255, 255, 255, 0.7); border-radius: 16px; box-shadow: 0 4px 16px rgba(0, 0, 0, 0.08); backdrop-filter: blur(20px); border: 1px solid rgba(255, 255, 255, 0.5); transition: all 0.3s ease;">
+          <div class="device-status-header">
+            <div class="device-status-summary">
               <strong style="font-size: 11px; color: #1e293b; font-weight: 700; letter-spacing: -0.3px;">设备在线状态查询结果 (共${deviceStatusList.length}台):</strong>
-              <div style="display: flex; gap: 16px; font-size: 11px; font-weight: 600;">
+              <div class="device-status-counts">
                 <div style="color: #137333;">在线: ${onlineCount}台</div>
                 <div style="color: #c5221f;">离线: ${offlineCount}台</div>
               </div>
             </div>
             <button id="exportDeviceStatusBtn" style="background: linear-gradient(135deg, #3b82f6 0%, #60a5fa 100%); color: white; border: none; padding: 8px 14px; border-radius: 10px; cursor: pointer; font-size: 10px; font-weight: 700; box-shadow: 0 4px 12px rgba(59, 130, 246, 0.25); letter-spacing: -0.2px; backdrop-filter: blur(10px); border: 1px solid rgba(255, 255, 255, 0.3); transition: all 0.25s ease;">📥 导出清单</button>
           </div>
-          <div style="overflow-x: auto;">
-            <table class="data-table" style="margin-top: 8px; width: 100%; border-collapse: collapse; border-radius: 12px; overflow: hidden; box-shadow: 0 4px 16px rgba(0, 0, 0, 0.08); background: rgba(255, 255, 255, 0.8); backdrop-filter: blur(10px); border: 1px solid rgba(226, 232, 240, 0.5);">
+          <div class="device-status-table-wrap">
+            <table class="data-table" style="margin-top: 0; width: 100%; border-collapse: collapse; border-radius: 12px; overflow: hidden; box-shadow: 0 4px 16px rgba(0, 0, 0, 0.08); background: rgba(255, 255, 255, 0.8); backdrop-filter: blur(10px); border: 1px solid rgba(226, 232, 240, 0.5);">
               <tr style="background: linear-gradient(135deg, rgba(248, 250, 252, 0.9) 0%, rgba(241, 245, 249, 0.9) 100%); border-bottom: 1px solid rgba(226, 232, 240, 0.5); backdrop-filter: blur(10px);">
                 <th style="padding: 12px 14px; text-align: left; border: 1px solid rgba(226, 232, 240, 0.5); font-weight: 700; font-size: 9px; color: #1e293b; letter-spacing: -0.2px; text-transform: uppercase; width: 40px;">序号</th>
                 <th style="padding: 12px 14px; text-align: left; border: 1px solid rgba(226, 232, 240, 0.5); font-weight: 700; font-size: 9px; color: #1e293b; letter-spacing: -0.2px; text-transform: uppercase;">设备UID</th>
@@ -1135,7 +1295,7 @@ async function queryDeviceStatus() {
       ` : '<div class="no-data">没有设备信息</div>';
 
       
-      document.getElementById('deviceStatusResult').style.display = 'block';
+      document.getElementById('deviceStatusResult').classList.add('is-visible');
       document.getElementById('deviceStatus').innerHTML = resultHtml;
       
       // 添加导出按钮事件监听器
@@ -1146,16 +1306,13 @@ async function queryDeviceStatus() {
         });
       }
       
-      showStatus('设备在线状态查询成功');
+      showStatus(`设备在线状态查询成功，共 ${deviceStatusList.length} 台设备`, false);
     } catch (err) {
       if (err.name === 'AbortError') {
         return;
       }
       throw err;
     } finally {
-      // 隐藏进度条
-      progressContainer.classList.add('hidden');
-      stopBtn.style.display = 'none';
       // 移除进度更新监听器
       chrome.runtime.onMessage.removeListener(progressUpdateListener);
       // 清理中止控制器
@@ -1164,15 +1321,6 @@ async function queryDeviceStatus() {
   } catch (err) {
     console.error('查询设备在线状态失败:', err);
     showStatus('查询设备在线状态失败: ' + err.message, true);
-    // 隐藏进度条
-    const progressContainer = document.getElementById('deviceStatusProgress');
-    const stopBtn = document.getElementById('stopDeviceStatusQueryBtn');
-    if (progressContainer) {
-      progressContainer.classList.add('hidden');
-    }
-    if (stopBtn) {
-      stopBtn.style.display = 'none';
-    }
     // 清理中止控制器
     deviceStatusQueryAbortController = null;
   }
@@ -1250,7 +1398,7 @@ function clearCascadeData() {
   document.getElementById('customListResult').style.display = 'none';
   document.getElementById('levelCusRegionResult').style.display = 'none';
   document.getElementById('uploadStats').style.display = 'none';
-  document.getElementById('cascadeTaskResult').style.display = 'none';
+  document.getElementById('cascadeTaskResult').classList.remove('is-visible');
   
   // 清空结果内容
   document.getElementById('regionCode').textContent = '-';
@@ -1258,10 +1406,6 @@ function clearCascadeData() {
   document.getElementById('levelCusRegion').textContent = '-';
   document.getElementById('uploadStatsContent').textContent = '-';
   document.getElementById('cascadeTask').textContent = '-';
-  
-  // 清除状态信息
-  const status = document.getElementById('status');
-  status.style.display = 'none';
   
   showStatus('级联功能页面数据已清除', false);
 }
@@ -1295,15 +1439,11 @@ function clearQueryData() {
   document.getElementById('uploadStatsQuery').style.display = 'block';
   
   // 隐藏结果区域
-  document.getElementById('deviceStatusResult').classList.add('hidden');
+  document.getElementById('deviceStatusResult').classList.remove('is-visible');
   
   // 清空结果内容
   document.getElementById('uploadStatsContentQuery').textContent = '-';
   document.getElementById('deviceStatus').textContent = '-';
-  
-  // 清除状态信息
-  const status = document.getElementById('status');
-  status.style.display = 'none';
   
   showStatus('设备查询页面数据已清除', false);
 }
@@ -1395,10 +1535,6 @@ function clearQualityData() {
   document.getElementById('qualityImage').src = '';
   document.getElementById('qualityError').textContent = '';
   
-  // 清除状态信息
-  const status = document.getElementById('status');
-  status.style.display = 'none';
-  
   showStatus('画质监测页面数据已清除', false);
 }
 
@@ -1479,24 +1615,29 @@ async function queryDeviceList() {
     if (!tab) return;
     
     shouldStopQuery = false;
-    
-    document.getElementById('deviceListProgress').classList.remove('hidden');
-    document.getElementById('stopQueryBtn').style.display = 'inline-block';
-    updateProgress(0, '正在初始化...');
-    
+
     let allDevices = [];
     let pageNo = 1;
     const pageSize = 10;
     let hasMore = true;
     let totalCount = 0;
-    
-    showStatus('开始获取设备清单，正在处理...', false);
+
+    const bindDeviceListStop = () => {
+      const stopBtn = document.getElementById('deviceListStatusStopBtn');
+      if (stopBtn) {
+        stopBtn.onclick = () => {
+          shouldStopQuery = true;
+          renderDeviceListProgressStatus(0, '正在停止查询...', false);
+        };
+      }
+    };
+
+    renderDeviceListProgressStatus(0, '正在初始化...', true);
+    bindDeviceListStop();
     
     while (hasMore && !shouldStopQuery) {
       if (shouldStopQuery) {
         showStatus('查询已停止', false);
-        document.getElementById('deviceListProgress').classList.add('hidden');
-        document.getElementById('stopQueryBtn').style.display = 'none';
         return;
       }
       
@@ -1509,8 +1650,6 @@ async function queryDeviceList() {
       
       if (!response.success) {
         showStatus('获取设备清单失败: ' + response.error, true);
-        document.getElementById('deviceListProgress').classList.add('hidden');
-        document.getElementById('stopQueryBtn').style.display = 'none';
         return;
       }
       
@@ -1525,7 +1664,8 @@ async function queryDeviceList() {
         
         // 更新进度条
         const progress = totalCount > 0 ? Math.min((allDevices.length / totalCount) * 100, 100) : 0;
-        updateProgress(progress, `正在获取第 ${pageNo} 页数据... (已获取 ${allDevices.length}/${totalCount} 台设备)`);
+        updateDeviceListProgressStatus(progress, `正在获取第 ${pageNo} 页数据... (已获取 ${allDevices.length}/${totalCount} 台设备)`);
+        bindDeviceListStop();
         
         // 检查是否还有更多数据
         if (allDevices.length >= totalCount || deviceList.length === 0) {
@@ -1541,31 +1681,22 @@ async function queryDeviceList() {
     // 检查是否是用户停止
     if (shouldStopQuery) {
       showStatus('查询已停止', false);
-      document.getElementById('deviceListProgress').classList.add('hidden');
-      document.getElementById('stopQueryBtn').style.display = 'none';
       return;
     }
     
     // 完成进度
-    updateProgress(100, `查询完成！共获取 ${allDevices.length} 台设备`);
-    
-    
-    // 隐藏进度条和停止按钮
-    setTimeout(() => {
-      document.getElementById('deviceListProgress').classList.add('hidden');
-      document.getElementById('stopQueryBtn').style.display = 'none';
-    }, 2000);
+    renderDeviceListProgressStatus(100, `查询完成！共获取 ${allDevices.length} 台设备`, false);
     
     // 显示设备清单
     if (allDevices.length > 0) {
       const resultHtml = `
-        <div style="padding: 16px; background: rgba(255, 255, 255, 0.7); border-radius: 16px; box-shadow: 0 4px 16px rgba(0, 0, 0, 0.08); backdrop-filter: blur(20px); border: 1px solid rgba(255, 255, 255, 0.5); transition: all 0.3s ease;">
-          <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px;">
+        <div class="device-list-panel" style="padding: 16px; background: rgba(255, 255, 255, 0.7); border-radius: 16px; box-shadow: 0 4px 16px rgba(0, 0, 0, 0.08); backdrop-filter: blur(20px); border: 1px solid rgba(255, 255, 255, 0.5); transition: all 0.3s ease;">
+          <div class="device-list-header">
             <strong style="font-size: 11px; color: #1e293b; font-weight: 700; letter-spacing: -0.3px;">设备清单 (共${allDevices.length}台):</strong>
             <button id="exportDeviceListBtn" style="background: linear-gradient(135deg, #3b82f6 0%, #60a5fa 100%); color: white; border: none; padding: 8px 14px; border-radius: 10px; cursor: pointer; font-size: 10px; font-weight: 700; box-shadow: 0 4px 12px rgba(59, 130, 246, 0.25); letter-spacing: -0.2px; backdrop-filter: blur(10px); border: 1px solid rgba(255, 255, 255, 0.3); transition: all 0.25s ease;">📥 导出清单</button>
           </div>
-          <div style="overflow-x: auto;">
-            <table class="data-table" style="margin-top: 8px; width: 100%; border-collapse: collapse; border-radius: 12px; overflow: hidden; box-shadow: 0 4px 16px rgba(0, 0, 0, 0.08); background: rgba(255, 255, 255, 0.8); backdrop-filter: blur(10px); border: 1px solid rgba(226, 232, 240, 0.5);">
+          <div class="device-list-table-wrap">
+            <table class="data-table" style="margin-top: 0; width: 100%; border-collapse: collapse; border-radius: 12px; overflow: hidden; box-shadow: 0 4px 16px rgba(0, 0, 0, 0.08); background: rgba(255, 255, 255, 0.8); backdrop-filter: blur(10px); border: 1px solid rgba(226, 232, 240, 0.5);">
               <tr style="background: linear-gradient(135deg, rgba(248, 250, 252, 0.9) 0%, rgba(241, 245, 249, 0.9) 100%); border-bottom: 1px solid rgba(226, 232, 240, 0.5); backdrop-filter: blur(10px);">
                 <th style="padding: 12px 14px; text-align: left; border: 1px solid rgba(226, 232, 240, 0.5); font-weight: 700; font-size: 9px; color: #1e293b; letter-spacing: -0.2px; text-transform: uppercase; width: 40px;">序号</th>
                 <th style="padding: 12px 14px; text-align: left; border: 1px solid rgba(226, 232, 240, 0.5); font-weight: 700; font-size: 9px; color: #1e293b; letter-spacing: -0.2px; text-transform: uppercase; max-width: 120px;">设备名称</th>
@@ -1587,7 +1718,7 @@ async function queryDeviceList() {
         </div>
       `;
       
-      document.getElementById('deviceListResult').style.display = 'block';
+      document.getElementById('deviceListResult').classList.add('is-visible');
       document.getElementById('deviceListContent').innerHTML = resultHtml;
       
       // 添加导出按钮事件监听器
@@ -1600,7 +1731,7 @@ async function queryDeviceList() {
       
       showStatus(`设备清单获取成功，共 ${allDevices.length} 台设备`, false);
     } else {
-      document.getElementById('deviceListResult').style.display = 'block';
+      document.getElementById('deviceListResult').classList.add('is-visible');
       document.getElementById('deviceListContent').innerHTML = '<div style="padding: 10px; text-align: center; color: #6c757d;">没有设备信息</div>';
       showStatus('未查询到设备信息', true);
     }
@@ -1625,11 +1756,8 @@ function clearDeviceListData() {
   
   // 隐藏结果区域
   document.getElementById('customListResultDeviceList').style.display = 'none';
-  document.getElementById('deviceListResult').style.display = 'none';
+  document.getElementById('deviceListResult').classList.remove('is-visible');
   document.getElementById('deviceListProgress').style.display = 'none';
-  
-  // 隐藏停止按钮
-  document.getElementById('stopQueryBtn').style.display = 'none';
   
   // 重置停止标志
   shouldStopQuery = false;
@@ -1638,30 +1766,30 @@ function clearDeviceListData() {
   document.getElementById('customListDeviceList').textContent = '-';
   document.getElementById('deviceListContent').textContent = '-';
   
-  // 重置进度条
-  document.getElementById('progressFill').style.width = '0%';
-  document.getElementById('progressPercent').textContent = '0%';
-  document.getElementById('progressText').textContent = '正在初始化...';
-  
-  // 清除状态信息
-  const status = document.getElementById('status');
-  status.style.display = 'none';
-  
   showStatus('设备清单查询页面数据已清除', false);
 }
 
-// 标签页切换功能
-document.querySelectorAll('.tab-btn').forEach(btn => {
+// 右侧树形菜单切换功能
+document.querySelectorAll('.tree-item[data-tab]').forEach(btn => {
   btn.addEventListener('click', () => {
     const tabId = btn.getAttribute('data-tab');
     
-    // 移除所有标签页的active类
-    document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
+    // 移除所有菜单项和页面的active类
+    document.querySelectorAll('.tree-item[data-tab]').forEach(b => b.classList.remove('active'));
     document.querySelectorAll('.page').forEach(p => p.classList.remove('active'));
     
-    // 添加当前标签页的active类
+    // 添加当前菜单项和页面的active类
     btn.classList.add('active');
     document.getElementById(tabId).classList.add('active');
+  });
+});
+
+document.querySelectorAll('.tree-group-toggle').forEach(toggle => {
+  toggle.addEventListener('click', () => {
+    const group = toggle.closest('.tree-group');
+    if (group) {
+      group.classList.toggle('collapsed');
+    }
   });
 });
 
@@ -1714,12 +1842,12 @@ async function queryCustomListForRegionAdjust() {
           currentEntUserId = qiyezhuList[0].id;
           await getUserRegionListForRegionAdjust(qiyezhuList[0].id);
         } else {
-          document.getElementById('regionAdjustListResult').style.display = 'block';
+          document.getElementById('regionAdjustListResult').classList.add('is-visible');
           document.getElementById('regionAdjustList').textContent = '该账户不是企业主';
           showStatus('该账户不是企业主', true);
         }
       } else {
-        document.getElementById('regionAdjustListResult').style.display = 'block';
+        document.getElementById('regionAdjustListResult').classList.add('is-visible');
         document.getElementById('regionAdjustList').textContent = '未获取到数据';
         showStatus('获取客户列表失败', true);
       }
@@ -1758,15 +1886,18 @@ async function getLevelCusRegionForRegionAdjust() {
       
       if (regionData && regionData.data && regionData.data.cusRegionList) {
         const regionList = regionData.data.cusRegionList;
-        const regionHtml = renderRegionTree(regionList);
+        const regionHtml = renderRegionTree(regionList, 0, {
+          context: 'regionAdjust',
+          showGbCodeAction: true
+        });
         
-        document.getElementById('regionAdjustListResult').style.display = 'block';
+        document.getElementById('regionAdjustListResult').classList.add('is-visible');
         document.getElementById('regionAdjustList').innerHTML = regionHtml;
         showStatus('获取监控目录成功');
         
         addRegionClickHandlers();
       } else {
-        document.getElementById('regionAdjustListResult').style.display = 'block';
+        document.getElementById('regionAdjustListResult').classList.add('is-visible');
         document.getElementById('regionAdjustList').textContent = '未获取到监控目录数据';
         showStatus('获取监控目录失败', true);
       }
@@ -1785,7 +1916,7 @@ function clearRegionAdjustData() {
   document.getElementById('regionAdjustAccount').value = '';
   
   // 隐藏结果区域
-  document.getElementById('regionAdjustListResult').style.display = 'none';
+  document.getElementById('regionAdjustListResult').classList.remove('is-visible');
   document.getElementById('regionAdjustForm').style.display = 'none';
   document.getElementById('regionAdjustResult').style.display = 'none';
   
@@ -1796,10 +1927,6 @@ function clearRegionAdjustData() {
   document.getElementById('regionAdjustEntUserId').value = '';
   document.getElementById('regionAdjustParentId').value = '';
   document.getElementById('regionAdjustContent').textContent = '-';
-  
-  // 清除状态信息
-  const status = document.getElementById('status');
-  status.style.display = 'none';
   
   showStatus('监控目录调整页面数据已清除', false);
 }
@@ -1890,17 +2017,17 @@ async function autoFillUserId() {
       currentAccount = account;
       
       document.getElementById('userIdDisplay').textContent = maskUserId(userId) || '未检测到用户ID';
-      document.getElementById('accountDisplay').textContent = maskPhone(account) || '未检测到手机号';
+      updateAccountDisplays(maskPhone(account) || '未检测到手机号');
       
       showStatus('获取用户信息成功');
     } else {
       document.getElementById('userIdDisplay').textContent = '未检测到用户ID';
-      document.getElementById('accountDisplay').textContent = '未检测到手机号';
+      updateAccountDisplays('未检测到手机号');
     }
   } catch (err) {
     console.error('获取用户信息失败:', err);
     document.getElementById('userIdDisplay').textContent = '获取失败';
-    document.getElementById('accountDisplay').textContent = '获取失败';
+    updateAccountDisplays('获取失败');
   }
 }
 

@@ -14,7 +14,7 @@
     body {
       width: 100%;
       height: 100vh;
-      padding: 16px;
+      padding: 16px 16px 70px;
       font-family: -apple-system, BlinkMacSystemFont, 'SF Pro Display', 'Segoe UI', Roboto, sans-serif;
       font-size: 11px;
       background: linear-gradient(180deg, #fafbfc 0%, #f0f2f5 100%);
@@ -29,58 +29,162 @@
       position: relative;
       z-index: 10;
     }
-    h2 {
-      margin: 0 0 16px 0;
-      color: #ffffff;
-      font-size: 19px;
-      background: linear-gradient(135deg, #3b82f6 0%, #60a5fa 100%);
-      padding: 16px;
-      text-align: center;
-      font-weight: 700;
-      border-radius: 16px;
-      box-shadow: 0 8px 32px rgba(59, 130, 246, 0.25);
-      letter-spacing: -0.5px;
-      backdrop-filter: blur(20px);
-      border: 1px solid rgba(255, 255, 255, 0.3);
-      transition: all 0.3s ease;
-    }
-    h2:hover {
-      transform: translateY(-2px);
-      box-shadow: 0 12px 40px rgba(59, 130, 246, 0.35);
-    }
-    .tab-container {
+    .layout-shell {
       display: flex;
-      margin-bottom: 16px;
-      gap: 8px;
-      position: relative;
-      z-index: 9;
-    }
-    .tab-btn {
       flex: 1;
-      padding: 12px 10px;
+      gap: 16px;
+      min-height: 0;
+    }
+    .page-container {
+      flex: 1;
+      min-width: 0;
+      min-height: 0;
+      position: relative;
+      padding-top: 64px;
+    }
+    .tree-sidebar {
+      width: 176px;
+      flex-shrink: 0;
+      background: rgba(255, 255, 255, 0.75);
+      border-radius: 16px;
+      padding: 14px 12px;
+      border: 1px solid rgba(255, 255, 255, 0.5);
+      box-shadow: 0 4px 16px rgba(0, 0, 0, 0.08);
+      backdrop-filter: blur(20px);
+      overflow-y: auto;
+    }
+    .sidebar-profile {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 10px;
+      margin-bottom: 14px;
+      padding: 14px 12px;
+      background: linear-gradient(180deg, rgba(59, 130, 246, 0.12) 0%, rgba(255, 255, 255, 0.68) 100%);
+      border: 1px solid rgba(255, 255, 255, 0.6);
+      border-radius: 14px;
+      box-shadow: 0 4px 16px rgba(59, 130, 246, 0.1);
+    }
+    .sidebar-icon {
+      width: 52px;
+      height: 52px;
+      border-radius: 14px;
+      object-fit: cover;
+      box-shadow: 0 8px 24px rgba(59, 130, 246, 0.18);
+      background: #ffffff;
+      padding: 8px;
+    }
+    .sidebar-account-label {
+      color: #64748b;
+      font-size: 10px;
+      font-weight: 700;
+      letter-spacing: 0.4px;
+    }
+    .sidebar-account-value {
+      width: 100%;
+      padding: 9px 10px;
+      border-radius: 10px;
+      background: rgba(255, 255, 255, 0.9);
+      color: #1e293b;
+      font-size: 11px;
+      font-weight: 700;
+      text-align: center;
+      word-break: break-all;
+      border: 1px solid rgba(226, 232, 240, 0.9);
+    }
+    .tree-title {
+      margin-bottom: 10px;
+      color: #475569;
+      font-size: 10px;
+      font-weight: 800;
+      letter-spacing: 0.8px;
+      text-transform: uppercase;
+    }
+    .tree-group {
+      margin-bottom: 10px;
+    }
+    .tree-group:last-child {
+      margin-bottom: 0;
+    }
+    .tree-group-toggle {
+      width: 100%;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 8px 10px;
       border: none;
-      border-radius: 12px;
-      background: rgba(255, 255, 255, 0.7);
+      border-radius: 10px;
+      background: transparent;
+      color: #1e293b;
+      cursor: pointer;
+      font-size: 11px;
+      font-weight: 700;
+      text-align: left;
+      transition: background 0.2s ease, color 0.2s ease;
+    }
+    .tree-group-toggle:hover {
+      background: rgba(59, 130, 246, 0.08);
+      color: #2563eb;
+    }
+    .tree-group-toggle::after {
+      content: '▾';
+      font-size: 10px;
+      color: #94a3b8;
+      transition: transform 0.2s ease;
+    }
+    .tree-group.collapsed .tree-group-toggle::after {
+      transform: rotate(-90deg);
+    }
+    .tree-children {
+      list-style: none;
+      margin: 6px 0 0;
+      padding: 0 0 0 12px;
+      border-right: 1px solid rgba(148, 163, 184, 0.2);
+    }
+    .tree-group.collapsed .tree-children {
+      display: none;
+    }
+    .tree-leaf {
+      margin: 4px 0;
+    }
+    .tree-item {
+      width: 100%;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      padding: 9px 10px;
+      border: none;
+      border-radius: 10px;
+      background: transparent;
       color: #64748b;
       cursor: pointer;
       font-size: 11px;
       font-weight: 600;
-      transition: all 0.25s cubic-bezier(0.4, 0, 0.2, 1);
-      backdrop-filter: blur(20px);
-      box-shadow: 0 4px 16px rgba(0, 0, 0, 0.08);
-      border: 1px solid rgba(255, 255, 255, 0.5);
+      text-align: left;
+      transition: all 0.2s ease;
     }
-    .tab-btn.active {
+    .tree-item::before {
+      content: '';
+      width: 6px;
+      height: 6px;
+      border-radius: 50%;
+      background: rgba(148, 163, 184, 0.6);
+      flex-shrink: 0;
+      transition: all 0.2s ease;
+    }
+    .tree-item:hover {
+      background: rgba(59, 130, 246, 0.08);
+      color: #2563eb;
+      transform: translateX(-2px);
+    }
+    .tree-item.active {
       background: linear-gradient(135deg, #3b82f6 0%, #60a5fa 100%);
-      color: white;
-      box-shadow: 0 8px 24px rgba(59, 130, 246, 0.35);
-      transform: translateY(-3px);
-      border: 1px solid rgba(255, 255, 255, 0.8);
+      color: #ffffff;
+      box-shadow: 0 8px 24px rgba(59, 130, 246, 0.28);
     }
-    .tab-btn:hover:not(.active) {
-      background: rgba(255, 255, 255, 0.9);
-      transform: translateY(-2px);
-      box-shadow: 0 6px 20px rgba(0, 0, 0, 0.12);
+    .tree-item.active::before {
+      background: #ffffff;
+      box-shadow: 0 0 0 3px rgba(255, 255, 255, 0.2);
     }
     .page {
       display: none;
@@ -88,7 +192,7 @@
       overflow-y: auto;
       overflow-x: hidden;
       min-height: 0;
-      padding-bottom: 70px;
+      padding-bottom: 12px;
     }
     .page.active {
       display: flex;
@@ -211,14 +315,16 @@
       box-shadow: 0 2px 8px rgba(0, 0, 0, 0.04);
     }
     .status {
+      position: absolute;
+      top: 0;
+      left: 0;
+      right: 0;
       padding: 12px 16px;
       border-radius: 12px;
-      margin-bottom: 12px;
       font-size: 11px;
       font-weight: 600;
       backdrop-filter: blur(20px);
-      position: relative;
-      z-index: 11;
+      z-index: 20;
       display: flex;
       align-items: center;
       transition: all 0.3s ease;
@@ -227,12 +333,59 @@
       box-shadow: 0 4px 16px rgba(0, 0, 0, 0.08);
     }
     .status.hidden {
-      opacity: 0;
-      visibility: hidden;
-      height: 0;
-      margin-bottom: 0;
-      padding: 0 16px;
+      display: none;
+    }
+    .status.info {
+      background: rgba(59, 130, 246, 0.12);
+      color: #1d4ed8;
+      border: 1px solid rgba(59, 130, 246, 0.24);
+    }
+    .status-progress {
+      display: flex;
+      flex-direction: column;
+      gap: 10px;
+      width: 100%;
+    }
+    .status-progress-header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 12px;
+    }
+    .status-progress-meta {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      flex-wrap: wrap;
+    }
+    .status-progress-title {
+      font-weight: 800;
+      color: inherit;
+    }
+    .status-progress-percent {
+      font-size: 11px;
+      font-weight: 800;
+      color: inherit;
+    }
+    .status-progress-bar {
+      width: 100%;
+      height: 8px;
+      background: rgba(226, 232, 240, 0.85);
+      border-radius: 999px;
       overflow: hidden;
+      box-shadow: inset 0 1px 3px rgba(0, 0, 0, 0.08);
+    }
+    .status-progress-fill {
+      width: 0%;
+      height: 100%;
+      background: linear-gradient(90deg, #3b82f6 0%, #60a5fa 100%);
+      border-radius: inherit;
+      transition: width 0.25s ease;
+    }
+    .status-progress-text {
+      color: inherit;
+      opacity: 0.9;
+      line-height: 1.5;
     }
     .status.success {
       background: rgba(16, 185, 129, 0.15);
@@ -460,6 +613,210 @@
     .data-table tr:last-child td {
       border-bottom: none;
     }
+    #deviceStatusResult {
+      display: none;
+      flex: 1;
+      min-height: 0;
+      margin-top: 12px;
+    }
+    #deviceStatusResult.is-visible {
+      display: flex;
+    }
+    #deviceStatus {
+      flex: 1;
+      min-height: 0;
+      display: flex;
+      flex-direction: column;
+    }
+    .device-status-panel {
+      flex: 1;
+      min-height: 0;
+      margin-bottom: 0;
+      display: flex;
+      flex-direction: column;
+    }
+    .device-status-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      gap: 12px;
+      margin-bottom: 12px;
+      flex-wrap: wrap;
+    }
+    .device-status-summary {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      flex-wrap: wrap;
+    }
+    .device-status-counts {
+      display: flex;
+      gap: 16px;
+      font-size: 11px;
+      font-weight: 600;
+      flex-wrap: wrap;
+    }
+    .device-status-table-wrap {
+      flex: 1;
+      min-height: 0;
+      overflow: auto;
+      padding-bottom: 2px;
+    }
+    #batchCascade {
+      overflow: hidden;
+    }
+    #batchCascade > .input-group,
+    #batchCascade > .result-box,
+    #batchCascade > .batch-cascade-actions,
+    #batchCascade > #progressContainer {
+      flex-shrink: 0;
+    }
+    #batchCascade.page.active {
+      height: 100%;
+    }
+    #cascadeTaskResult {
+      display: none;
+      flex: 1;
+      min-height: 0;
+      margin-top: 12px;
+      overflow: hidden;
+    }
+    #cascadeTaskResult.is-visible {
+      display: flex;
+    }
+    #cascadeTask {
+      flex: 1;
+      min-height: 0;
+      display: flex;
+      flex-direction: column;
+      overflow: hidden;
+    }
+    .cascade-task-panel {
+      flex: 1;
+      min-height: 0;
+      display: flex;
+      flex-direction: column;
+      overflow: hidden;
+    }
+    .cascade-task-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      gap: 12px;
+      margin-bottom: 12px;
+      flex-wrap: wrap;
+    }
+    .cascade-task-summary {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      flex-wrap: wrap;
+    }
+    .cascade-task-counts {
+      display: flex;
+      gap: 16px;
+      font-size: 11px;
+      font-weight: 600;
+      flex-wrap: wrap;
+    }
+    .cascade-task-table-wrap {
+      flex: 1;
+      min-height: 0;
+      overflow: auto;
+      padding-bottom: 2px;
+    }
+    #batchQuery {
+      overflow: hidden;
+    }
+    #batchQuery > .input-group,
+    #batchQuery > .result-box,
+    #batchQuery > .batch-query-actions,
+    #batchQuery > #deviceStatusProgress {
+      flex-shrink: 0;
+    }
+    #batchQuery.page.active {
+      height: 100%;
+    }
+    #deviceStatusResult {
+      overflow: hidden;
+    }
+    #deviceListResult {
+      display: none;
+      flex: 1;
+      min-height: 0;
+      margin-top: 12px;
+      overflow: hidden;
+    }
+    #deviceListResult.is-visible {
+      display: flex;
+    }
+    #deviceListContent {
+      flex: 1;
+      min-height: 0;
+      display: flex;
+      flex-direction: column;
+      overflow: hidden;
+    }
+    .device-list-panel {
+      flex: 1;
+      min-height: 0;
+      display: flex;
+      flex-direction: column;
+      overflow: hidden;
+    }
+    .device-list-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      gap: 12px;
+      margin-bottom: 12px;
+      flex-wrap: wrap;
+    }
+    .device-list-table-wrap {
+      flex: 1;
+      min-height: 0;
+      overflow: auto;
+      padding-bottom: 2px;
+      height: 100%;
+    }
+    #regionAdjust {
+      overflow: hidden;
+    }
+    #regionAdjust > .input-group,
+    #regionAdjust > .result-box:last-child {
+      flex-shrink: 0;
+    }
+    #regionAdjust.page.active {
+      height: 100%;
+    }
+    #regionAdjustListResult {
+      flex: 1;
+      min-height: 0;
+      display: none;
+      overflow: hidden;
+    }
+    #regionAdjustListResult.is-visible {
+      display: flex;
+      flex-direction: column;
+    }
+    #regionAdjustList {
+      flex: 1;
+      min-height: 0;
+      max-height: none !important;
+      overflow: auto !important;
+    }
+    #deviceList {
+      overflow: hidden;
+    }
+    #deviceList > .input-group,
+    #deviceList > .result-box,
+    #deviceList > .device-list-actions,
+    #deviceList > #deviceListProgress {
+      flex-shrink: 0;
+    }
+    #deviceList.page.active {
+      height: 100%;
+    }
     
     /* 自定义滚动条样式 */
     ::-webkit-scrollbar {
@@ -525,22 +882,11 @@
   </style>
 </head>
 <body>
-  <div class="header-section">
-    <h2 style="display: flex; align-items: center; justify-content: center; gap: 8px;"><img src="icons/icon.png" alt="图标" style="width: 24px; height: 24px; border-radius: 4px;"> 天翼视联Chrome助手</h2>
-    
-    <div id="status" class="status hidden"></div>
-    
-    <div class="tab-container">
-      <button class="tab-btn active" data-tab="userInfo">用户信息</button>
-      <button class="tab-btn" data-tab="batchCascade">批量级联-1</button>
-      <button class="tab-btn" data-tab="batchQuery">批量设备查询</button>
-      <button class="tab-btn" data-tab="deviceList">设备清单查询</button>
-      <button class="tab-btn" data-tab="regionAdjust">监控目录调整</button>
-      <button class="tab-btn" data-tab="qualityMonitor">画质监测</button>
-      <button class="tab-btn" data-tab="cascade2">批量级联-2</button>
-    </div>
-  </div>
-  
+  <div class="header-section"></div>
+
+  <div class="layout-shell">
+    <div class="page-container">
+  <div id="status" class="status info">等待操作...</div>
   <!-- 用户信息页面 -->
   <div id="userInfo" class="page active">
     <div class="section">
@@ -623,12 +969,12 @@
     
 
     
-    <div style="display: flex; gap: 8px; margin-top: 10px;">
+    <div class="batch-cascade-actions" style="display: flex; gap: 8px; margin-top: 10px;">
       <button id="createCascadeTaskBtn" class="refresh-btn" style="flex: 1;">📝 创建级联任务</button>
       <button id="clearCascadeDataBtn" class="refresh-btn" style="flex: 1; background: linear-gradient(135deg, #ef4444 0%, #dc2626 100%);">🗑️ 清除数据</button>
     </div>
     
-    <div id="progressContainer" class="progress-container hidden">
+    <div id="progressContainer" class="progress-container hidden" style="display: none !important;">
       <div class="progress-label">
         <span>📊 级联进度</span>
         <div style="display: flex; align-items: center; gap: 8px;">
@@ -641,9 +987,8 @@
       <div id="progressText" class="progress-text">正在初始化...</div>
     </div>
     
-    <div id="cascadeTaskResult" class="result-box hidden">
-      <div class="result-label">级联任务结果:</div>
-      <div id="cascadeTask" class="content-box">-</div>
+    <div id="cascadeTaskResult" class="result-box">
+      <div id="cascadeTask">-</div>
     </div>
   </div>
 
@@ -719,12 +1064,12 @@
       <div id="uploadStatsContentQuery" class="content-box">-</div>
     </div>
     
-    <div style="display: flex; gap: 8px; margin-top: 10px;">
+    <div class="batch-query-actions" style="display: flex; gap: 8px; margin-top: 10px;">
       <button id="queryDeviceStatusBtn" class="refresh-btn" style="flex: 1;">🔍 查询设备在线状态</button>
       <button id="clearQueryDataBtn" class="refresh-btn" style="flex: 1; background: linear-gradient(135deg, #ef4444 0%, #dc2626 100%);">🗑️ 清除数据</button>
     </div>
     
-    <div id="deviceStatusProgress" class="progress-container hidden">
+    <div id="deviceStatusProgress" class="progress-container hidden" style="display: none !important;">
       <div class="progress-label">
         <span>📊 查询进度</span>
         <div style="display: flex; align-items: center; gap: 8px;">
@@ -757,7 +1102,7 @@
       <div id="customListDeviceList" class="content-box" style="max-height: 80px;">-</div>
     </div>
     
-    <div id="deviceListProgress" class="progress-container hidden">
+    <div id="deviceListProgress" class="progress-container hidden" style="display: none !important;">
       <div class="progress-label">
         <span>📊 查询进度</span>
         <div style="display: flex; align-items: center; gap: 8px;">
@@ -771,13 +1116,13 @@
       <div id="progressText" class="progress-text">正在初始化...</div>
     </div>
     
-    <div style="display: flex; gap: 8px; margin-top: 10px;">
+    <div class="device-list-actions" style="display: flex; gap: 8px; margin-top: 10px;">
       <button id="queryDeviceListBtn" class="refresh-btn" style="flex: 1;">🔍 查询设备清单</button>
       <button id="clearDeviceListBtn" class="refresh-btn" style="flex: 1; background: linear-gradient(135deg, #ef4444 0%, #dc2626 100%);">🗑️ 清除数据</button>
     </div>
     
-    <div id="deviceListResult" style="margin-top: 12px; display: none;">
-      <div id="deviceListContent" style="max-height: 150px; overflow-y: auto;">-</div>
+    <div id="deviceListResult">
+      <div id="deviceListContent">-</div>
     </div>
   </div>
   
@@ -791,7 +1136,7 @@
     
 
     
-    <div id="regionAdjustListResult" class="result-box hidden">
+    <div id="regionAdjustListResult" class="result-box">
       <div class="result-label" style="display: flex; justify-content: space-between; align-items: center;">
         <span>监控目录列表:</span>
         <div style="display: flex; gap: 8px;">
@@ -799,7 +1144,7 @@
           <button id="addRootRegionBtn" class="query-btn" style="padding: 6px 12px; font-size: 10px;">➕ 添加根目录</button>
         </div>
       </div>
-      <div id="regionAdjustList" class="content-box" style="max-height: 200px; overflow-y: auto;">-</div>
+      <div id="regionAdjustList" class="content-box">-</div>
     </div>
     
 
@@ -835,7 +1180,7 @@
       <div id="qualityProgressText" class="progress-text">正在初始化...</div>
     </div>
     
-    <div id="qualityResult" style="margin-top: 12px; display: none;">
+  <div id="qualityResult" style="margin-top: 12px; display: none;">
       <div style="margin-bottom: 14px; padding: 16px; background: rgba(255, 255, 255, 0.7); border-radius: 16px; box-shadow: 0 4px 16px rgba(0, 0, 0, 0.08); backdrop-filter: blur(20px); border: 1px solid rgba(255, 255, 255, 0.5); transition: all 0.3s ease;">
         <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px;">
           <strong style="font-size: 11px; color: #1e293b; font-weight: 700; letter-spacing: -0.3px;">画质监测结果:</strong>
@@ -847,12 +1192,56 @@
       </div>
     </div>
   </div>
+
+    </div>
+
+    <aside class="tree-sidebar">
+      <div class="sidebar-profile">
+        <img class="sidebar-icon" src="icons/icon.png" alt="插件图标">
+        <div class="sidebar-account-label">管理员账号</div>
+        <div id="sidebarAccountDisplay" class="sidebar-account-value">-</div>
+      </div>
+
+      <div class="tree-title">功能目录</div>
+
+      <div class="tree-group" data-group="user">
+        <button type="button" class="tree-group-toggle">用户信息</button>
+        <ul class="tree-children">
+          <li class="tree-leaf"><button type="button" class="tree-item active" data-tab="userInfo">用户信息</button></li>
+        </ul>
+      </div>
+
+      <div class="tree-group" data-group="cascade">
+        <button type="button" class="tree-group-toggle">级联功能</button>
+        <ul class="tree-children">
+          <li class="tree-leaf"><button type="button" class="tree-item" data-tab="batchCascade">批量级联-1</button></li>
+          <li class="tree-leaf"><button type="button" class="tree-item" data-tab="cascade2">批量级联-2</button></li>
+        </ul>
+      </div>
+
+      <div class="tree-group" data-group="query">
+        <button type="button" class="tree-group-toggle">批量查询功能</button>
+        <ul class="tree-children">
+          <li class="tree-leaf"><button type="button" class="tree-item" data-tab="batchQuery">批量设备查询</button></li>
+          <li class="tree-leaf"><button type="button" class="tree-item" data-tab="deviceList">设备清单查询</button></li>
+          <li class="tree-leaf"><button type="button" class="tree-item" data-tab="qualityMonitor">画质监测</button></li>
+        </ul>
+      </div>
+
+      <div class="tree-group" data-group="region">
+        <button type="button" class="tree-group-toggle">监控目录调整功能</button>
+        <ul class="tree-children">
+          <li class="tree-leaf"><button type="button" class="tree-item" data-tab="regionAdjust">监控目录调整</button></li>
+        </ul>
+      </div>
+    </aside>
+  </div>
   
   <div class="footer-section">
     <div style="text-align: center; color: #94a3b8; font-size: 11px; font-weight: 600; letter-spacing: -0.2px;">
       <span>Version 3.0.1</span>
       <span style="margin: 0 10px; opacity: 0.5;">|</span>
-      <span style="background: linear-gradient(135deg, #3b82f6 0%, #60a5fa 100%); -webkit-background-clip: text; -webkit-text-fill-color: transparent; background-clip: text; font-weight: 800; font-size: 12px; letter-spacing: 0.3px;">👨‍💻 乐山云中台梁勇</span>
+      <span style="background: linear-gradient(135deg, #3b82f6 0%, #60a5fa 100%); -webkit-background-clip: text; -webkit-text-fill-color: transparent; background-clip: text; font-weight: 800; font-size: 12px; letter-spacing: 0.3px;">👨‍💻 乐山云中台视联网组</span>
     </div>
   </div>
   

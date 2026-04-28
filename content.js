@@ -638,4 +638,63 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
 
     return true;
   }
+
+  if (request.action === 'saveGBCode') {
+    const {
+      userId,
+      account,
+      type = '0',
+      code,
+      regionId,
+      entUserId: requestEntUserId
+    } = request;
+
+    const params = new URLSearchParams({
+      userId: userId || '',
+      account: account || '',
+      type: String(type),
+      code: code || '',
+      regionId: regionId || '',
+      entUserId: requestEntUserId || entUserId || ''
+    });
+
+    vcpGet('https://vcp.21cn.com/vcpCamera/cusRegion/saveGBCode', params)
+      .then(result => {
+        if (result.code === 0 || result.code === 20000) {
+          sendResponse({ success: true, data: result });
+        } else {
+          sendResponse({ success: false, error: result.msg || '目录编码保存失败' });
+        }
+      })
+      .catch(err => {
+        console.error('saveGBCode失败:', err);
+        sendResponse({ success: false, error: err.message });
+      });
+
+    return true;
+  }
+
+  if (request.action === 'getGBCodeByUserId') {
+    const { userId, account, regionId } = request;
+    const params = new URLSearchParams({
+      userId: userId || '',
+      account: account || '',
+      regionId: regionId || ''
+    });
+
+    vcpGet('https://vcp.21cn.com/vcpCamera/cusRegion/getGBCodeByUserId', params)
+      .then(result => {
+        if (result.code === 0 || result.code === 20000) {
+          sendResponse({ success: true, data: result });
+        } else {
+          sendResponse({ success: false, error: result.msg || '获取目录编码失败' });
+        }
+      })
+      .catch(err => {
+        console.error('getGBCodeByUserId失败:', err);
+        sendResponse({ success: false, error: err.message });
+      });
+
+    return true;
+  }
 });
