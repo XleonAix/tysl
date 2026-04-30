@@ -2954,3 +2954,680 @@ document.getElementById('downloadTemplateCascade2').addEventListener('click', (e
   e.preventDefault();
   downloadCascade2Template();
 });
+
+// ==================== 恢复级联功能 ====================
+
+// 全局变量：恢复级联数据
+let restoreCascadeData = null;
+
+// 读取恢复级联CSV文件（包含序号、deviceCode、account、createTime、fullRegionPath、regionCode、备注）
+async function readRestoreCascadeCSVFile(file) {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    
+    reader.onload = (e) => {
+      try {
+        const text = e.target.result;
+        const lines = text.split('\n');
+        const data = [];
+        
+        // 解析表头，动态匹配列
+        const headers = parseCSVLine(lines[0] || '');
+        console.log('CSV表头:', headers);
+        
+        // 查找列索引
+        const accountIndex = headers.findIndex(h => h.includes('account') || h.includes('企业主') || h.includes('手机号'));
+        const deviceCodeIndex = headers.findIndex(h => h.includes('deviceCode') || h.includes('设备编码') || h.includes('设备'));
+        const regionCodeIndex = headers.findIndex(h => h.includes('regionCode') || h.includes('区域编码') || h.includes('目录编码') || h.includes('地区编码') || h.includes('目标目录编码'));
+        const serialNoIndex = headers.findIndex(h => h.includes('序号') || h.includes('serialNo'));
+        const createTimeIndex = headers.findIndex(h => h.includes('createTime') || h.includes('创建时间') || h.includes('时间'));
+        const fullRegionPathIndex = headers.findIndex(h => h.includes('fullRegionPath') || h.includes('路径') || h.includes('目录路径'));
+        const remarkIndex = headers.findIndex(h => h.includes('备注') || h.includes('remark'));
+        
+        console.log('列索引: accountIndex=', accountIndex, ', deviceCodeIndex=', deviceCodeIndex, ', regionCodeIndex=', regionCodeIndex);
+        
+        // 从第二行开始读取数据
+        for (let i = 1; i < lines.length; i++) {
+          const line = lines[i].trim();
+          if (!line) continue;
+          
+          // 解析CSV行（处理逗号分隔，支持引号包裹的字段）
+          const fields = parseCSVLine(line);
+          if (fields.length >= 2) {
+            const record = {
+              serialNo: serialNoIndex >= 0 ? fields[serialNoIndex]?.trim() || '' : '',
+              deviceCode: deviceCodeIndex >= 0 ? fields[deviceCodeIndex]?.trim() || '' : '',
+              account: accountIndex >= 0 ? fields[accountIndex]?.trim() || '' : '',
+              createTime: createTimeIndex >= 0 ? fields[createTimeIndex]?.trim() || '' : '',
+              fullRegionPath: fullRegionPathIndex >= 0 ? fields[fullRegionPathIndex]?.trim() || '' : '',
+              regionCode: regionCodeIndex >= 0 ? fields[regionCodeIndex]?.trim() || '' : '',
+              remark: remarkIndex >= 0 ? fields[remarkIndex]?.trim() || '' : ''
+            };
+            console.log('解析记录:', record);
+            data.push(record);
+          }
+        }
+        
+        // 去重处理（以deviceCode和regionCode的组合为唯一键）
+        const seen = new Set();
+        const uniqueData = [];
+        for (const item of data) {
+          const key = item.deviceCode + '|' + item.regionCode;
+          if (!seen.has(key) && item.deviceCode && item.account) {
+            seen.add(key);
+            uniqueData.push(item);
+          }
+        }
+        
+        resolve({
+          data: uniqueData,
+          totalUpload: data.length,
+          duplicateCount: data.length - uniqueData.length,
+          validCount: uniqueData.length
+        });
+      } catch (err) {
+        reject(err);
+      }
+    };
+    
+    reader.onerror = () => reject(new Error('文件读取失败'));
+    reader.readAsText(file, 'UTF-8');
+  });
+}
+
+// 处理恢复级联CSV文件
+async function processRestoreCascadeCSVFile(file) {
+  try {
+    const result = await readRestoreCascadeCSVFile(file);
+    restoreCascadeData = result.data;
+    
+    const uploadStatsHtml = `
+      <div style="overflow-x: auto;">
+        <table class="data-table" style="margin-top: 8px; width: 100%; border-collapse: collapse; border-radius: 12px; overflow: hidden; box-shadow: 0 4px 16px rgba(0, 0, 0, 0.08); background: rgba(255, 255, 255, 0.8); backdrop-filter: blur(10px); border: 1px solid rgba(226, 232, 240, 0.5);">
+          <tr style="background: linear-gradient(135deg, rgba(248, 250, 252, 0.9) 0%, rgba(241, 245, 249, 0.9) 100%); border-bottom: 1px solid rgba(226, 232, 240, 0.5); backdrop-filter: blur(10px);">
+            <th style="padding: 12px 14px; text-align: left; border: 1px solid rgba(226, 232, 240, 0.5); font-weight: 700; font-size: 9px; color: #1e293b; letter-spacing: -0.2px; text-transform: uppercase;">总上传条数</th>
+            <th style="padding: 12px 14px; text-align: left; border: 1px solid rgba(226, 232, 240, 0.5); font-weight: 700; font-size: 9px; color: #1e293b; letter-spacing: -0.2px; text-transform: uppercase;">重复条数</th>
+            <th style="padding: 12px 14px; text-align: left; border: 1px solid rgba(226, 232, 240, 0.5); font-weight: 700; font-size: 9px; color: #1e293b; letter-spacing: -0.2px; text-transform: uppercase;">有效条数</th>
+          </tr>
+          <tr style="border-bottom: 1px solid rgba(226, 232, 240, 0.5); transition: all 0.2s ease; font-size: 10px;">
+            <td style="padding: 12px 14px; border: 1px solid rgba(226, 232, 240, 0.5); color: #475569; font-weight: 500;">${result.totalUpload}</td>
+            <td style="padding: 12px 14px; border: 1px solid rgba(226, 232, 240, 0.5); color: #c5221f; font-weight: 600;">${result.duplicateCount}</td>
+            <td style="padding: 12px 14px; border: 1px solid rgba(226, 232, 240, 0.5); color: #137333; font-weight: 600;">${result.validCount}</td>
+          </tr>
+        </table>
+      </div>
+      <button id="reuploadBtnRestoreCascade" style="margin-top: 12px; width: 100%; background: linear-gradient(135deg, #3b82f6 0%, #60a5fa 100%); color: white; border: none; padding: 10px; border-radius: 10px; cursor: pointer; font-size: 11px; font-weight: 700; box-shadow: 0 4px 12px rgba(59, 130, 246, 0.25); letter-spacing: -0.2px; backdrop-filter: blur(10px); border: 1px solid rgba(255, 255, 255, 0.3); transition: all 0.25s ease;">🔄 重新上传</button>
+    `;
+    
+    document.getElementById('uploadStatsRestoreCascade').style.display = 'block';
+    const uploadStatsContentEl = document.getElementById('uploadStatsContentRestoreCascade');
+    if (uploadStatsContentEl) {
+      uploadStatsContentEl.innerHTML = uploadStatsHtml;
+    }
+    
+    // 隐藏上传区域
+    const dropZoneEl = document.getElementById('dropZoneRestoreCascade');
+    const uploadFileGroup = dropZoneEl ? dropZoneEl.closest('.input-group') : null;
+    if (uploadFileGroup) uploadFileGroup.style.display = 'none';
+    
+    // 重新上传按钮事件
+    document.getElementById('reuploadBtnRestoreCascade').addEventListener('click', () => {
+      if (uploadFileGroup) uploadFileGroup.style.display = 'block';
+      document.getElementById('uploadStatsRestoreCascade').style.display = 'none';
+      document.getElementById('excelFileRestoreCascade').value = '';
+      document.getElementById('restoreCascadeResult').style.display = 'none';
+      restoreCascadeData = null;
+      showStatus('可以重新上传文件');
+    });
+    
+    // 显示数据预览
+    let previewHtml = '<div style="font-size: 10px; max-height: 200px; overflow-y: auto;">';
+    for (let i = 0; i < Math.min(10, result.data.length); i++) {
+      const item = result.data[i];
+      previewHtml += `
+        <div style="margin-bottom: 6px; padding: 6px; background: rgba(59, 130, 246, 0.05); border-radius: 6px;">
+          <div style="display: flex; justify-content: space-between;">
+            <span style="font-weight: 600; color: #1e293b;">📱 ${item.account}</span>
+            <span style="font-family: monospace; color: #64748b;">${item.deviceCode}</span>
+          </div>
+          <div style="color: #94a3b8; margin-top: 2px;">regionCode: ${item.regionCode || '-'}</div>
+        </div>
+      `;
+    }
+    if (result.data.length > 10) {
+      previewHtml += `<div style="text-align: center; color: #94a3b8; padding: 8px;">... 还有 ${result.data.length - 10} 条数据</div>`;
+    }
+    previewHtml += '</div>';
+    
+    const previewContentEl = document.getElementById('restoreCascadePreviewContent');
+    if (previewContentEl) {
+      previewContentEl.innerHTML = previewHtml;
+    }
+    const previewEl = document.getElementById('restoreCascadePreview');
+    if (previewEl) {
+      previewEl.style.display = 'block';
+    }
+    
+    showStatus(`文件读取成功 - 共${result.validCount}条有效记录`);
+  } catch (err) {
+    console.error('处理恢复级联文件失败:', err);
+    showStatus('处理文件失败: ' + err.message, true);
+  }
+}
+
+// 下载恢复级联模板
+function downloadRestoreCascadeTemplate() {
+  const csvContent = `序号,deviceCode,account,createTime,fullRegionPath,regionCode,备注
+1,51111210441324014720,19981363388,2024-01-01 10:00:00,测试目录1/幸福村委会,511112100203001020,
+2,51111210441324014721,19981363388,2024-01-02 11:00:00,测试目录1/幸福村委会,511112100203001020,
+3,51111210441324014722,13800138000,2024-01-03 12:00:00,生产目录/厂区A,511112100203001030,`;
+  
+  const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = '恢复级联模板.csv';
+  document.body.appendChild(a);
+  a.click();
+  document.body.removeChild(a);
+  URL.revokeObjectURL(url);
+  
+  showStatus('模板下载成功');
+}
+
+// 更新恢复级联进度条
+function updateRestoreCascadeProgress(percent, text) {
+  const progressFill = document.getElementById('restoreCascadeProgressFill');
+  const progressPercent = document.getElementById('restoreCascadeProgressPercent');
+  const progressText = document.getElementById('restoreCascadeProgressText');
+  
+  if (progressFill) progressFill.style.width = percent + '%';
+  if (progressPercent) progressPercent.textContent = Math.round(percent) + '%';
+  if (progressText) progressText.textContent = text;
+}
+
+// 获取企业主信息
+async function getCustomListForRestore(account) {
+  const response = await sendVcpMessage('getCustomListForAccount', { userId: currentUserId, account });
+  if (!response || !response.success) {
+    throw new Error(response?.error || '查询企业主失败');
+  }
+  
+  if (!response.qiyezhuList || response.qiyezhuList.length === 0) {
+    throw new Error('该账户不是企业主');
+  }
+  
+  const qiyezhu = response.qiyezhuList[0];
+  return {
+    entUserId: qiyezhu.id,
+    cascadeCode: qiyezhu.cascadeCode,
+    useDeviceCount: qiyezhu.useDeviceCount || 0,
+    deviceCount: qiyezhu.deviceCount || 0
+  };
+}
+
+// 获取用户区域信息
+async function getUserRegionListForRestore(userId) {
+  const response = await sendVcpMessage('getUserRegionListForRestore', { userId });
+  if (!response || !response.success) {
+    throw new Error(response?.error || '获取区域信息失败');
+  }
+  
+  return response.data;
+}
+
+// 获取所有目录信息
+async function getAllLevelCusRegionForRestore(entUserId) {
+  const response = await sendVcpMessage('getAllLevelCusRegion', { entUserId });
+  if (!response || !response.success) {
+    throw new Error(response?.error || '获取目录信息失败');
+  }
+  
+  return response.data;
+}
+
+// 执行单个恢复级联记录
+async function executeRestoreCascadeRecord(record, userId, progressCallback) {
+  console.log('executeRestoreCascadeRecord called with:', record, 'userId:', userId);
+  const { deviceCode, account, regionCode: targetRegionCode } = record;
+  const results = {
+    deviceCode,
+    account,
+    targetRegionCode,
+    success: false,
+    message: '',
+    deviceInfo: null,
+    matchedRegion: null,
+    failedStep: '',
+    debugLog: []
+  };
+  
+  const addLog = (log) => {
+    results.debugLog.push(log);
+    console.log(log);
+  };
+  
+  try {
+    // ========== 步骤1：查询企业主信息 ==========
+    addLog('Step 1: 查询企业主信息');
+    progressCallback(`正在查询 ${account} 的企业主信息...`);
+    const qiyezhuInfo = await getCustomListForRestore(account);
+    addLog('企业主信息: entUserId=' + qiyezhuInfo.entUserId + ', cascadeCode=' + qiyezhuInfo.cascadeCode);
+    
+    // ========== 步骤2：获取用户区域信息（用于设备查询）==========
+    addLog('Step 2: 获取用户区域信息');
+    progressCallback(`正在获取 ${account} 的区域信息...`);
+    const userRegionList = await getUserRegionListForRestore(qiyezhuInfo.entUserId);
+    const userRegionCode = userRegionList[0]?.regionCode || '';
+    addLog('userRegionCode: ' + userRegionCode);
+    
+    // ========== 步骤3：获取所有目录信息 ==========
+    addLog('Step 3: 获取所有目录信息');
+    progressCallback(`正在获取 ${account} 的目录列表...`);
+    const allRegions = await getAllLevelCusRegionForRestore(qiyezhuInfo.entUserId);
+    addLog('获取到目录数量: ' + allRegions.length);
+    
+    // ========== 步骤4：根据regionCode匹配目录 ==========
+    addLog('Step 4: 匹配目录, targetRegionCode: ' + targetRegionCode);
+    addLog('allRegions count: ' + allRegions.length);
+    addLog('allRegions前5个: ' + JSON.stringify(allRegions.slice(0, 5).map(r => ({regionCode: r.regionCode, name: r.name, id: r.id}))));
+    progressCallback(`正在匹配目录: ${targetRegionCode}...`);
+    
+    // 先尝试精确匹配
+    let matchedRegion = allRegions.find(r => r.regionCode === targetRegionCode);
+    
+    // 如果精确匹配失败，尝试前缀匹配（处理CSV中regionCode不完整的情况）
+    if (!matchedRegion) {
+      addLog('精确匹配失败，尝试前缀匹配...');
+      matchedRegion = allRegions.find(r => r.regionCode && (r.regionCode.startsWith(targetRegionCode) || targetRegionCode.startsWith(r.regionCode)));
+    }
+    
+    // 如果前缀匹配也失败，尝试去掉末尾的破折号后匹配
+    if (!matchedRegion && targetRegionCode.endsWith('-')) {
+      addLog('前缀匹配失败，尝试去掉末尾破折号后匹配...');
+      const trimmedCode = targetRegionCode.slice(0, -1);
+      matchedRegion = allRegions.find(r => r.regionCode && (r.regionCode === trimmedCode || r.regionCode.startsWith(trimmedCode)));
+    }
+    
+    addLog('matchedRegion: ' + JSON.stringify(matchedRegion));
+    
+    if (!matchedRegion) {
+      addLog('失败: 未找到匹配的目录');
+      results.message = '未找到匹配的目录';
+      results.failedStep = '步骤4：目录匹配';
+      return results;
+    }
+    results.matchedRegion = matchedRegion;
+    
+    // ========== 步骤5：获取设备信息 ==========
+    addLog('Step 5: 获取设备信息, deviceCode=' + deviceCode + ', userRegionCode=' + userRegionCode);
+    progressCallback(`正在查询设备信息: ${deviceCode}...`);
+    const deviceResponse = await sendVcpMessage('getRegionsByDevTreeType', { 
+      deviceCodes: [deviceCode],
+      deviceCode: deviceCode,
+      regionCode: userRegionCode,
+      pageSize: '1000'
+    });
+    addLog('deviceResponse: success=' + (deviceResponse?.success) + ', deviceList长度=' + (deviceResponse?.deviceList?.length || 0));
+    
+    if (!deviceResponse || !deviceResponse.success || !deviceResponse.deviceList || deviceResponse.deviceList.length === 0) {
+      addLog('失败: 设备不存在或查询失败');
+      results.message = '设备不存在或查询失败';
+      results.failedStep = '步骤5：设备查询';
+      return results;
+    }
+    
+    const deviceInfo = deviceResponse.deviceList[0];
+    results.deviceInfo = deviceInfo;
+    
+    // ========== 步骤6：执行级联操作 ==========
+    addLog('Step 6: 执行级联操作');
+    addLog('deviceInfo: ' + JSON.stringify(deviceInfo));
+    addLog('matchedRegion: id=' + matchedRegion.id + ', name=' + matchedRegion.name);
+    progressCallback(`正在执行级联操作...`);
+    const cascadeResponse = await sendVcpMessage('createCascadeTask', {
+      userId: userId,
+      account: account,
+      deviceList: [deviceInfo],
+      pRegionId: matchedRegion.id,
+      pRegionName: matchedRegion.name
+    });
+    addLog('cascadeResponse: success=' + cascadeResponse?.success + ', error=' + cascadeResponse?.error);
+    console.log('cascadeResponse:', cascadeResponse);
+    
+    if (cascadeResponse && cascadeResponse.success) {
+      results.success = true;
+      results.message = '级联成功';
+      addLog('成功: 级联操作完成');
+    } else {
+      results.message = cascadeResponse?.error || '级联失败';
+      results.failedStep = '步骤6：级联操作';
+      addLog('失败: ' + results.message);
+    }
+    
+  } catch (err) {
+    addLog('异常: ' + err.message);
+    results.message = err.message;
+    results.failedStep = '异常';
+  }
+  
+  return results;
+}
+
+// 开始恢复级联处理（优化版：按account分组，减少API请求）
+async function startRestoreCascade() {
+  if (!restoreCascadeData || restoreCascadeData.length === 0) {
+    showStatus('请先上传CSV文件', true);
+    return;
+  }
+  
+  const userId = currentUserId;
+  if (!userId) {
+    showStatus('请先获取用户ID', true);
+    return;
+  }
+  
+  const progressContainer = document.getElementById('restoreCascadeProgress');
+  progressContainer.classList.remove('hidden');
+  updateRestoreCascadeProgress(0, '正在初始化...');
+  
+  // ========== 步骤1：按account分组 ==========
+  updateRestoreCascadeProgress(5, '正在按手机号分组数据...');
+  const groupedByAccount = {};
+  for (const record of restoreCascadeData) {
+    if (!groupedByAccount[record.account]) {
+      groupedByAccount[record.account] = [];
+    }
+    groupedByAccount[record.account].push(record);
+  }
+  const accountList = Object.keys(groupedByAccount);
+  console.log('按account分组完成，共', accountList.length, '个企业主');
+  
+  const allResults = [];
+  const totalRecords = restoreCascadeData.length;
+  let processedCount = 0;
+  
+  // ========== 步骤2：逐个处理每个account ==========
+  for (const account of accountList) {
+    const recordsForAccount = groupedByAccount[account];
+    
+    updateRestoreCascadeProgress(
+      (processedCount / totalRecords) * 100,
+      `正在处理 ${account} (${recordsForAccount.length}条设备)`
+    );
+    
+    // 2.1 获取该account的企业主信息（每个account只请求1次）
+    const qiyezhuInfo = await getCustomListForRestore(account);
+    
+    // 2.2 获取该account的用户区域信息（每个account只请求1次）
+    const userRegionList = await getUserRegionListForRestore(qiyezhuInfo.entUserId);
+    const userRegionCode = userRegionList[0]?.regionCode || '';
+    
+    // 2.3 获取该account的所有目录信息（每个account只请求1次）
+    const allRegions = await getAllLevelCusRegionForRestore(qiyezhuInfo.entUserId);
+    console.log(`account=${account}, 获取到目录数量:`, allRegions.length);
+    
+    // 2.4 在获取的目录信息中，匹配该account下所有设备的regionCode
+    for (const record of recordsForAccount) {
+      processedCount++;
+      const results = {
+        deviceCode: record.deviceCode,
+        account: record.account,
+        targetRegionCode: record.regionCode,
+        success: false,
+        message: '',
+        deviceInfo: null,
+        matchedRegion: null,
+        failedStep: '',
+        debugLog: []
+      };
+      
+      const addLog = (log) => {
+        results.debugLog.push(log);
+        console.log(log);
+      };
+      
+      addLog('开始处理设备: ' + record.deviceCode);
+      
+      try {
+        // 步骤4：根据regionCode匹配目录（基于已获取的目录列表）
+        const matchedRegion = allRegions.find(r => r.regionCode === record.regionCode);
+        
+        if (!matchedRegion) {
+          // 尝试前缀匹配
+          const prefixMatch = allRegions.find(r => r.regionCode && 
+            (r.regionCode.startsWith(record.regionCode) || record.regionCode.startsWith(r.regionCode)));
+          if (prefixMatch) {
+            results.matchedRegion = prefixMatch;
+            addLog('前缀匹配成功: ' + prefixMatch.name);
+          } else {
+            results.message = '未找到匹配的目录';
+            results.failedStep = '步骤4：目录匹配';
+            addLog('失败: 未找到匹配的目录');
+            allResults.push(results);
+            continue;
+          }
+        } else {
+          results.matchedRegion = matchedRegion;
+          addLog('精确匹配成功: ' + matchedRegion.name);
+        }
+        
+        // 步骤5：获取设备信息
+        addLog('正在查询设备信息: ' + record.deviceCode);
+        const deviceResponse = await sendVcpMessage('getRegionsByDevTreeType', {
+          deviceCodes: [record.deviceCode],
+          deviceCode: record.deviceCode,
+          regionCode: userRegionCode,
+          pageSize: '1000'
+        });
+        addLog('设备查询响应: success=' + (deviceResponse?.success) + ', deviceList长度=' + (deviceResponse?.deviceList?.length || 0));
+        
+        if (!deviceResponse || !deviceResponse.success || !deviceResponse.deviceList || deviceResponse.deviceList.length === 0) {
+          results.message = '设备不存在或查询失败';
+          results.failedStep = '步骤5：设备查询';
+          addLog('失败: 设备不存在或查询失败');
+          allResults.push(results);
+          continue;
+        }
+        
+        results.deviceInfo = deviceResponse.deviceList[0];
+        addLog('设备信息获取成功: ' + results.deviceInfo.deviceName);
+        
+        // 步骤6：执行级联操作
+        addLog('正在执行级联操作...');
+        const cascadeResponse = await sendVcpMessage('createCascadeTask', {
+          userId: userId,
+          account: account,
+          deviceList: [results.deviceInfo],
+          pRegionId: results.matchedRegion.id,
+          pRegionName: results.matchedRegion.name
+        });
+        addLog('级联响应: success=' + cascadeResponse?.success + ', error=' + cascadeResponse?.error);
+        
+        if (cascadeResponse && cascadeResponse.success) {
+          results.success = true;
+          results.message = '级联成功';
+          addLog('成功: 级联操作完成');
+        } else {
+          results.message = cascadeResponse?.error || '级联失败';
+          results.failedStep = '步骤6：级联操作';
+          addLog('失败: ' + results.message);
+        }
+        
+      } catch (err) {
+        results.message = err.message;
+        results.failedStep = '异常';
+        addLog('异常: ' + err.message);
+      }
+      
+      allResults.push(results);
+      
+      // 更新进度
+      updateRestoreCascadeProgress(
+        (processedCount / totalRecords) * 100,
+        `已处理 ${processedCount}/${totalRecords} (${account})`
+      );
+    }
+  }
+  
+  // 处理完成
+  updateRestoreCascadeProgress(100, '处理完成！');
+  
+  // 显示结果
+  displayRestoreCascadeResults(allResults);
+  
+  // 2秒后隐藏进度条
+  setTimeout(() => {
+    progressContainer.classList.add('hidden');
+  }, 2000);
+}
+
+// 显示恢复级联结果
+function displayRestoreCascadeResults(allResults) {
+  let totalRecords = allResults.length;
+  let totalSuccess = allResults.filter(r => r.success).length;
+  let totalFailed = totalRecords - totalSuccess;
+  
+  let resultHtml = `
+    <div style="margin-bottom: 12px; padding: 8px 12px; background: rgba(248, 250, 252, 0.8); border-radius: 10px; border: 1px solid rgba(226, 232, 240, 0.5);">
+      <div style="display: flex; justify-content: space-between; align-items: center;">
+        <div style="display: flex; gap: 16px; font-size: 11px; font-weight: 600;">
+          <div style="color: #137333;">成功: ${totalSuccess}条</div>
+          <div style="color: #c5221f;">失败: ${totalFailed}条</div>
+        </div>
+        <button id="exportRestoreCascadeBtn" style="background: linear-gradient(135deg, #3b82f6 0%, #60a5fa 100%); color: white; border: none; padding: 6px 12px; border-radius: 8px; cursor: pointer; font-size: 10px; font-weight: 700; box-shadow: 0 2px 8px rgba(59, 130, 246, 0.2); letter-spacing: -0.2px;">📥 导出结果</button>
+      </div>
+    </div>
+    <div style="overflow-x: auto;">
+      <table class="data-table" style="width: 100%; border-collapse: collapse; border-radius: 12px; overflow: hidden; box-shadow: 0 4px 16px rgba(0, 0, 0, 0.08); background: rgba(255, 255, 255, 0.8); backdrop-filter: blur(10px); border: 1px solid rgba(226, 232, 240, 0.5);">
+        <tr style="background: linear-gradient(135deg, rgba(248, 250, 252, 0.9) 0%, rgba(241, 245, 249, 0.9) 100%); border-bottom: 1px solid rgba(226, 232, 240, 0.5); backdrop-filter: blur(10px);">
+          <th style="padding: 12px 14px; text-align: left; border: 1px solid rgba(226, 232, 240, 0.5); font-weight: 700; font-size: 9px; color: #1e293b; letter-spacing: -0.2px; text-transform: uppercase; width: 40px;">序号</th>
+          <th style="padding: 12px 14px; text-align: left; border: 1px solid rgba(226, 232, 240, 0.5); font-weight: 700; font-size: 9px; color: #1e293b; letter-spacing: -0.2px; text-transform: uppercase;">企业主手机号</th>
+          <th style="padding: 12px 14px; text-align: left; border: 1px solid rgba(226, 232, 240, 0.5); font-weight: 700; font-size: 9px; color: #1e293b; letter-spacing: -0.2px; text-transform: uppercase;">设备编码</th>
+          <th style="padding: 12px 14px; text-align: left; border: 1px solid rgba(226, 232, 240, 0.5); font-weight: 700; font-size: 9px; color: #1e293b; letter-spacing: -0.2px; text-transform: uppercase;">目标目录编码</th>
+          <th style="padding: 12px 14px; text-align: left; border: 1px solid rgba(226, 232, 240, 0.5); font-weight: 700; font-size: 9px; color: #1e293b; letter-spacing: -0.2px; text-transform: uppercase;">匹配目录</th>
+          <th style="padding: 12px 14px; text-align: left; border: 1px solid rgba(226, 232, 240, 0.5); font-weight: 700; font-size: 9px; color: #1e293b; letter-spacing: -0.2px; text-transform: uppercase;">状态</th>
+          <th style="padding: 12px 14px; text-align: left; border: 1px solid rgba(226, 232, 240, 0.5); font-weight: 700; font-size: 9px; color: #1e293b; letter-spacing: -0.2px; text-transform: uppercase;">状态信息</th>
+          <th style="padding: 12px 14px; text-align: left; border: 1px solid rgba(226, 232, 240, 0.5); font-weight: 700; font-size: 9px; color: #1e293b; letter-spacing: -0.2px; text-transform: uppercase;">失败步骤</th>
+          <th style="padding: 12px 14px; text-align: left; border: 1px solid rgba(226, 232, 240, 0.5); font-weight: 700; font-size: 9px; color: #1e293b; letter-spacing: -0.2px; text-transform: uppercase;">调试信息</th>
+        </tr>
+  `;
+  
+  let index = 1;
+  for (const result of allResults) {
+    resultHtml += `
+      <tr style="border-bottom: 1px solid rgba(226, 232, 240, 0.5); transition: all 0.2s ease; font-size: 10px; background: ${result.success ? 'rgba(16, 185, 129, 0.05)' : 'rgba(239, 68, 68, 0.05)'}" onmouseover="this.style.background='rgba(59, 130, 246, 0.05)'" onmouseout="this.style.background='${result.success ? 'rgba(16, 185, 129, 0.05)' : 'rgba(239, 68, 68, 0.05)'}">
+        <td style="padding: 12px 14px; border: 1px solid rgba(226, 232, 240, 0.5); color: #475569; font-weight: 500; text-align: center; width: 40px;">${index++}</td>
+        <td style="padding: 12px 14px; border: 1px solid rgba(226, 232, 240, 0.5); color: #1e293b; font-weight: 600; font-size: 10px;">${result.account}</td>
+        <td style="padding: 12px 14px; border: 1px solid rgba(226, 232, 240, 0.5); color: #475569; font-family: 'SF Mono', monospace; font-size: 9px;">${result.deviceCode}</td>
+        <td style="padding: 12px 14px; border: 1px solid rgba(226, 232, 240, 0.5); color: #64748b; font-size: 10px;">${result.targetRegionCode}</td>
+        <td style="padding: 12px 14px; border: 1px solid rgba(226, 232, 240, 0.5); color: #059669; font-weight: 600; font-size: 10px;">${result.matchedRegion?.name || '-'}</td>
+        <td style="padding: 12px 14px; border: 1px solid rgba(226, 232, 240, 0.5); color: ${result.success ? '#137333' : '#c5221f'}; font-weight: 600;">${result.success ? '成功' : '失败'}</td>
+        <td style="padding: 12px 14px; border: 1px solid rgba(226, 232, 240, 0.5); color: #475569; font-size: 10px;">${result.message}</td>
+        <td style="padding: 12px 14px; border: 1px solid rgba(226, 232, 240, 0.5); color: #993300; font-weight: 600; font-size: 10px;">${result.failedStep || '-'}</td>
+        <td style="padding: 12px 14px; border: 1px solid rgba(226, 232, 240, 0.5); color: #666; font-size: 9px; max-width: 300px; word-break: break-all;">${result.debugLog ? result.debugLog.join('<br>') : '-'}</td>
+      </tr>
+    `;
+  }
+  
+  resultHtml += '</table></div>';
+  
+  const resultContentEl = document.getElementById('restoreCascadeResultContent');
+    if (resultContentEl) {
+      resultContentEl.innerHTML = resultHtml;
+    }
+    const resultEl = document.getElementById('restoreCascadeResult');
+    if (resultEl) {
+      resultEl.style.display = 'block';
+    }
+  
+  // 添加导出按钮事件
+  const exportBtn = document.getElementById('exportRestoreCascadeBtn');
+  if (exportBtn) {
+    exportBtn.addEventListener('click', () => {
+      exportRestoreCascadeResult(allResults);
+    });
+  }
+  
+  if (totalFailed === 0) {
+    showStatus(`恢复级联完成，全部${totalSuccess}条成功！`, false);
+  } else if (totalSuccess > 0) {
+    showStatus(`恢复级联完成，${totalSuccess}条成功，${totalFailed}条失败`, true);
+  } else {
+    showStatus(`恢复级联失败，全部${totalRecords}条失败`, true);
+  }
+}
+
+// 导出恢复级联结果
+function exportRestoreCascadeResult(allResults) {
+  if (!allResults || allResults.length === 0) {
+    showStatus('没有可导出的数据', true);
+    return;
+  }
+  
+  const headers = '序号,企业主手机号,设备编码,目标目录编码,匹配目录,状态,状态信息';
+  const rows = [];
+  let index = 1;
+  
+  for (const result of allResults) {
+    rows.push(`${index++},${result.account},${result.deviceCode},"${result.targetRegionCode || '-' }","${result.matchedRegion?.name || '-' }",${result.success ? '成功' : '失败'},"${result.message || '-'}"`);
+  }
+  
+  exportToCSV('恢复级联结果', headers, rows);
+}
+
+// 清除恢复级联数据
+function clearRestoreCascadeData() {
+  document.getElementById('excelFileRestoreCascade').value = '';
+  
+  const uploadFileGroup = document.getElementById('dropZoneRestoreCascade').closest('.input-group');
+  if (uploadFileGroup) uploadFileGroup.style.display = 'block';
+  
+  document.getElementById('uploadStatsRestoreCascade').style.display = 'none';
+  document.getElementById('restoreCascadePreview').style.display = 'none';
+  document.getElementById('restoreCascadeResult').style.display = 'none';
+  document.getElementById('restoreCascadeProgress').classList.add('hidden');
+  
+  document.getElementById('uploadStatsContentRestoreCascade').textContent = '-';
+  document.getElementById('restoreCascadePreview').textContent = '-';
+  document.getElementById('restoreCascadeResultContent').textContent = '-';
+  
+  updateRestoreCascadeProgress(0, '正在初始化...');
+  
+  restoreCascadeData = null;
+  
+  showStatus('恢复级联数据已清除', false);
+}
+
+// 恢复级联功能事件监听
+document.addEventListener('DOMContentLoaded', () => {
+  const startBtn = document.getElementById('startRestoreCascadeBtn');
+  const clearBtn = document.getElementById('clearRestoreCascadeDataBtn');
+  const downloadTemplateBtn = document.getElementById('downloadTemplateRestoreCascade');
+  const dropZone = document.getElementById('dropZoneRestoreCascade');
+  const fileInput = document.getElementById('excelFileRestoreCascade');
+  
+  if (startBtn) {
+    startBtn.addEventListener('click', startRestoreCascade);
+  }
+  
+  if (clearBtn) {
+    clearBtn.addEventListener('click', clearRestoreCascadeData);
+  }
+  
+  if (downloadTemplateBtn) {
+    downloadTemplateBtn.addEventListener('click', (e) => {
+      e.preventDefault();
+      downloadRestoreCascadeTemplate();
+    });
+  }
+  
+  // 拖放上传
+  if (dropZone && fileInput) {
+    setupDropZone({
+      dropZoneId: 'dropZoneRestoreCascade',
+      fileInputId: 'excelFileRestoreCascade',
+      processFn: processRestoreCascadeCSVFile
+    });
+  }
+});

@@ -1,8 +1,9 @@
-let cascadeCode = null;
-let entUserId = null;
-let selectedRegionId = null;
-let selectedRegionName = null;
-let regionCode_ = null;
+// 使用 typeof 检查避免重复声明
+if (typeof cascadeCode === 'undefined') { var cascadeCode = null; }
+if (typeof entUserId === 'undefined') { var entUserId = null; }
+if (typeof selectedRegionId === 'undefined') { var selectedRegionId = null; }
+if (typeof selectedRegionName === 'undefined') { var selectedRegionName = null; }
+if (typeof regionCode_ === 'undefined') { var regionCode_ = null; }
 
 function getSessionUserInfo() {
   try {
@@ -196,11 +197,12 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
   }
 
   if (request.action === 'getRegionsByDevTreeType') {
+    console.log('getRegionsByDevTreeType called with:', request);
     const { deviceCodes, deviceCode: singleDeviceCode, regionCode: requestRegionCode, pageSize: requestPageSize } = request;
     const url = 'https://vcp.21cn.com/vcpCamera/oper/custom/getRegionsByDevTreeType';
     const deviceList = [];
     const batchSize = 5;
-    const totalDevices = deviceCodes.length;
+    const totalDevices = deviceCodes ? deviceCodes.length : 0;
     let processedCount = 0;
 
     function sendProgressUpdate(current, total, deviceCode) {
@@ -216,6 +218,10 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
     }
 
     async function processBatches() {
+      if (!deviceCodes || deviceCodes.length === 0) {
+        sendResponse({ success: true, deviceList: [] });
+        return;
+      }
       for (let i = 0; i < deviceCodes.length; i += batchSize) {
         const batch = deviceCodes.slice(i, i + batchSize);
         const batchPromises = batch.map(deviceCode => {
@@ -264,6 +270,8 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
   }
 
   if (request.action === 'createCascadeTask') {
+    console.log('createCascadeTask called with:', request);
+    console.log('Current cascadeCode:', cascadeCode);
     const { userId, account, deviceList, pRegionId: requestPRegionId, pRegionName: requestPRegionName } = request;
     const url = 'https://vcp.21cn.com/vcpCamera/cascade/addCascadeTaskOperator';
 
@@ -692,6 +700,116 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
       })
       .catch(err => {
         console.error('getGBCodeByUserId失败:', err);
+        sendResponse({ success: false, error: err.message });
+      });
+
+    return true;
+  }
+
+  if (request.action === 'getCustomListForAccount') {
+    const { userId, account } = request;
+    const params = new URLSearchParams({
+      pageNo: '1',
+      pageSize: '50',
+      userId: userId,
+      account: account
+    });
+
+    vcpGet('https://vcp.21cn.com/vcpCamera/oper/custom/getCustomList', params)
+      .then(result => {
+        console.log('getCustomListForAccount result:', result);
+        if (result.data && result.data.list) {
+          const qiyezhuList = result.data.list.filter(item => item.roleName === '企业主');
+          console.log('qiyezhuList:', qiyezhuList);
+          if (qiyezhuList.length > 0) {
+            cascadeCode = qiyezhuList[0].cascadeCode;
+            entUserId = qiyezhuList[0].id;
+            console.log('Set cascadeCode:', cascadeCode, 'entUserId:', entUserId);
+          }
+          sendResponse({ 
+            success: true, 
+            data: result,
+            qiyezhuList: qiyezhuList
+          });
+        } else {
+          sendResponse({ success: true, data: result, qiyezhuList: [] });
+        }
+      })
+      .catch(err => {
+        console.error('getCustomListForAccount失败:', err);
+        sendResponse({ success: false, error: err.message });
+      });
+
+    return true;
+  }
+
+  if (request.action === 'getUserRegionListForRestore') {
+    const { userId } = request;
+    const data = new URLSearchParams();
+    data.append('userId', userId);
+
+    vcpPost('https://vcp.21cn.com/vcpCamera/user/getUserRegionList', data)
+      .then(result => {
+        if (result.code === 0 && result.data && result.data.length > 0) {
+          sendResponse({ success: true, data: result.data });
+        } else {
+          sendResponse({ success: false, error: result.msg || '获取地区信息失败' });
+        }
+      })
+      .catch(err => {
+        console.error('getUserRegionListForRestore失败:', err);
+        sendResponse({ success: false, error: err.message });
+      });
+
+    return true;
+  }
+
+  if (request.action === 'getAllLevelCusRegion') {
+    const { entUserId } = request;
+    console.log('getAllLevelCusRegion called with entUserId:', entUserId);
+    
+    async function fetchAllRegions(parentId = '', allRegions = []) {
+      const params = new URLSearchParams({
+        cusRegionId: parentId,
+        type: '1',
+        role: '8',
+        entUserId: entUserId || ''
+      });
+
+      try {
+        const result = await vcpGet('https://vcp.21cn.com/vcpCamera/cusRegion/getLevelCusRegion', params);
+        console.log('getLevelCusRegion result for parentId', parentId, ':', JSON.stringify(result, null, 2));
+        
+        if (result && result.data && result.data.cusRegionList) {
+          for (const region of result.data.cusRegionList) {
+            const hasChild = region.hasChild === 1 || region.hasChild === '1' || region.hasChild === true;
+            const regionWithParent = {
+              ...region,
+              hasChild: hasChild,
+              parentId: parentId || null
+            };
+            allRegions.push(regionWithParent);
+            
+            if (hasChild) {
+              await fetchAllRegions(region.id, allRegions);
+            }
+          }
+        }
+        
+        return allRegions;
+      } catch (err) {
+        console.error('getAllLevelCusRegion失败:', err);
+        throw err;
+      }
+    }
+
+    fetchAllRegions()
+      .then(allRegions => {
+        console.log('getAllLevelCusRegion completed, total regions:', allRegions.length);
+        console.log('First 3 regions:', JSON.stringify(allRegions.slice(0, 3), null, 2));
+        sendResponse({ success: true, data: allRegions });
+      })
+      .catch(err => {
         sendResponse({ success: false, error: err.message });
       });
 
